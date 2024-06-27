@@ -2,6 +2,7 @@ use crate::error_template::{AppError, ErrorTemplate};
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
+use crate::components::blogposts::BlogPosts;
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -39,12 +40,10 @@ pub fn App() -> impl IntoView {
 /// Renders the home page of your application.
 #[component]
 fn HomePage() -> impl IntoView {
-    // Creates a reactive value to update the button
-    let (count, set_count) = create_signal(0);
-    let on_click = move |_| set_count.update(|count| *count += 1);
-
     view! {
-        <h1 class="ir text-salmon-300 text-7xl">"Welcome to Leptos!"</h1>
-        <button on:click=on_click>"Click Me: " {count}</button>
+        <div class ="max-w-sm mx-auto">
+            <h1 class="text-5xl text-salmon-400 ib mb-8 mt-8">"bryptoblogs"</h1>
+            <BlogPosts/>
+        </div>
     }
 }
