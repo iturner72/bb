@@ -1,31 +1,80 @@
+use cfg_if::cfg_if;
 use leptos::*;
 use super::blogpost::{BlogPost, Post};
 
-#[server(GetBlogPosts)]
-pub async fn get_blog_posts() -> Result<Vec<Post>, ServerFnError> {
-    // TODO add supabase calls
-    // dummy data for now
-    Ok(vec![
-        Post {
-            id: 1,
-            title: "Understanding Blockchain".to_string(),
-            company: "CryptoTech".to_string(),
-            published_at: "2023-06-01".to_string(),
-            link: "https://example.com/post1".to_string(),
-            summary: "An introduction to blockchain technology and its potential applications in various industries.".to_string(),
-        },
-        Post {
-            id: 2,
-            title: "The Future of DeFi".to_string(),
-            company: "DeFi Innovators".to_string(),
-            published_at: "2023-06-15".to_string(),
-            link: "https://example.com/post2".to_string(),
-            summary: "Exploring the current state and future prospects of Decentralized Finance (DeFi) in the crypto ecosystem.".to_string(),
-        },
-    ])
+cfg_if! {
+    if #[cfg(feature = "ssr")] {
+        use crate::supabase::get_client;
+        use serde_json::from_str;
+        use std::fmt;
+        use log::{info, error};
+
+        #[derive(Debug)]
+        enum BlogError {
+            RequestError(String),
+            JsonParseError(String),
+        }
+        
+        impl fmt::Display for BlogError {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                match self {
+                    BlogError::RequestError(e) => write!(f, "Request error: {}", e),
+                    BlogError::JsonParseError(e) => write!(f, "JSON parse error: {}", e),
+                }
+            }
+        }
+        
+        fn to_server_error(e: BlogError) -> ServerFnError {
+            ServerFnError::ServerError(e.to_string())
+        }
+    } 
 }
 
 
+#[server(GetBlogPosts, "/api")]
+pub async fn get_blog_posts() -> Result<Vec<Post>, ServerFnError> {
+    info!("Fetching blog posts from Supabase...");
+    let client = get_client();
+    
+    let request = client
+        .from("posts")
+        .select("*")
+        .order("published_at.desc")
+        .limit(10);
+
+    let response = request
+        .execute()
+        .await
+        .map_err(|e| {
+            error!("Supabase request error: {}", e);
+            BlogError::RequestError(e.to_string())
+        }).map_err(to_server_error)?;
+
+    info!("Received response from Supabase");
+    info!("Response status: {:?}", response.status());
+    
+    let body = response.text().await.map_err(|e| {
+        error!("Error reading response body: {}", e);
+        BlogError::RequestError(e.to_string())
+    }).map_err(to_server_error)?;
+
+    info!("Response body length: {}", body.len());
+    info!("Response body (first 100 chars): {}", body.chars().take(100).collect::<String>());
+
+    if body.trim().is_empty() {
+        error!("Empty response from Supabase");
+        return Err(ServerFnError::ServerError("Empty response from Supabase".to_string()));
+    }
+
+    let posts: Vec<Post> = from_str(&body).map_err(|e| {
+        error!("JSON parse error: {}. Body: {}", e, body);
+        BlogError::JsonParseError(format!("Failed to parse JSON: {}", e))
+    }).map_err(to_server_error)?;
+
+    info!("Successfully parsed {} posts", posts.len());
+
+    Ok(posts)
+}
 
 
 #[component]
@@ -59,5 +108,3 @@ pub fn BlogPosts() -> impl IntoView {
         </div>
     }
 }
-
-

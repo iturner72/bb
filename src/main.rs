@@ -11,6 +11,7 @@ cfg_if! {
             Router,
         };
         use dotenv::dotenv;
+        use env_logger::Env;
         use leptos::*;
         use leptos_axum::{generate_route_list, handle_server_fns_with_context, LeptosRoutes};
         use bb::app::*;
@@ -20,7 +21,8 @@ cfg_if! {
         #[tokio::main]
         async fn main() {
             dotenv().ok();
-            
+            env_logger::init_from_env(Env::default().default_filter_or("info"));
+
             let conf = get_configuration(None).await.unwrap();
             let leptos_options = conf.leptos_options;
             let addr = leptos_options.site_addr;
