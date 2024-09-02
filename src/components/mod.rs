@@ -1,2 +1,1 @@
-pub mod blogpost;
-pub mod blogposts;
+pub mod poasts;

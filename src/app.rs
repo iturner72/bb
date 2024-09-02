@@ -2,7 +2,7 @@ use crate::error_template::{AppError, ErrorTemplate};
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
-use crate::components::blogposts::BlogPosts;
+use crate::components::poasts::Poasts;
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -43,7 +43,9 @@ fn HomePage() -> impl IntoView {
     view! {
         <div class ="max-w-sm mx-auto">
             <h1 class="text-5xl text-salmon-400 ib mb-8 mt-8">"bryptoblogs"</h1>
-            <BlogPosts/>
+            <Poasts/>
         </div>
     }
 }
+
+
