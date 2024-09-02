@@ -100,7 +100,7 @@ pub fn Poasts() -> impl IntoView {
                         poasts.get().map(|poasts_result| {
                             match poasts_result {
                                 Ok(poasts) => view! {
-                                    <div class="grid grid-cols-1 gap-6">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                                         <For
                                             each=move || poasts.clone()
                                             key=|poast| poast.id
@@ -109,7 +109,7 @@ pub fn Poasts() -> impl IntoView {
                                     </div>
                                 },
                                 Err(e) => view! { 
-                                    <div class="grid grid-cols-1 gap-6">
+                                    <div class="grid grid-cols-1 gap-3">
                                         <p class="text-salmon-400">"Error loading poasts: " {e.to_string()}</p> 
                                     </div>
                                 },
@@ -134,10 +134,10 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
         >
             <a 
                 href={poast.link.clone()}
-                class="block mb-6"
+                class="block mb-24"
             >
-                <article class="flex flex-col items-center cursor-pointer bg-gray-400 border-4 border-gray-700 hover:border-gray-800 p-6 shadow-lg hover:shadow-xl transition-all duration-0">
-                    <div class="flex items-center mb-2">
+                <article class="flex flex-col items-center cursor-pointer h-72 w-96 bg-gray-400 border-4 border-gray-700 hover:border-gray-800 p-6 shadow-lg hover:shadow-xl transition-all duration-0">
+                    <div class="flex items-center pb-2">
                         {poast.links.clone().and_then(|links| links.logo_url).map(|url| view! {
                             <img src={url} alt={format!("{} logo", poast.company)} class="w-10 h-10 mr-2 rounded-sm" />
                         })}
@@ -157,7 +157,8 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
             </a>
             {move || if show_details.get() {
                 view! {
-                    <div class="poast-details absolute top-1/2 left-full ml-[-2] h-auto w-72 bg-gray-600 p-4 shadow-lg rounded-sm overflow-y-auto transform -translate-y-1/2">
+                    <>
+                    <div class="poast-details absolute top-1/2 left-1/3 ml-[-2] h-auto w-72 bg-gray-600 p-4 shadow-lg rounded-sm overflow-y-auto transform -translate-y-2/3 md:transform-none md:top-10 md:left-1/2">
                         {
                             if let Some(full_text) = poast.full_text.clone() {
                                 view! { <p class="ii text-xs text-aqua-600">{full_text}</p> }
@@ -168,9 +169,14 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
                             }
                         }
                     </div>
+                    </>
                 }
             } else {
-                view! {<div></div>}
+                view! {
+                    <>
+                        <div class="w-max-0"></div>
+                    </>
+                }
             }}
         </div>
     }

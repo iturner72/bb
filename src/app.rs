@@ -41,8 +41,8 @@ pub fn App() -> impl IntoView {
 #[component]
 fn HomePage() -> impl IntoView {
     view! {
-        <div class ="max-w-sm mx-auto">
-            <h1 class="text-5xl text-salmon-400 ib mb-8 mt-8">"bryptoblogs"</h1>
+        <div class ="w-full mx-auto pl-12">
+            <h1 class="text-3xl text-salmon-400 ib p-8">"bryptoblogs"</h1>
             <Poasts/>
         </div>
     }
