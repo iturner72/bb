@@ -100,7 +100,7 @@ pub fn Poasts() -> impl IntoView {
                         poasts.get().map(|poasts_result| {
                             match poasts_result {
                                 Ok(poasts) => view! {
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                                         <For
                                             each=move || poasts.clone()
                                             key=|poast| poast.id
@@ -136,21 +136,21 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
                 href={poast.link.clone()}
                 class="block mb-24"
             >
-                <article class="flex flex-col items-center cursor-pointer h-72 w-96 bg-gray-400 border-4 border-gray-700 hover:border-gray-800 p-6 shadow-lg hover:shadow-xl transition-all duration-0">
+                <article class="base-poast flex flex-col items-center cursor-pointer h-72 w-10/12 bg-gray-400 border-4 border-gray-700 hover:border-gray-800 p-6 shadow-lg hover:shadow-xl transition-all duration-0">
                     <div class="flex items-center pb-2">
                         {poast.links.clone().and_then(|links| links.logo_url).map(|url| view! {
                             <img src={url} alt={format!("{} logo", poast.company)} class="w-10 h-10 mr-2 rounded-sm" />
                         })}
-                        <h2 class="ib text-2xl text-aqua-600">{&poast.company}</h2>
+                        <h2 class="ib text-3xl text-aqua-600">{&poast.company}</h2>
                     </div>
-                    <p class="text-mint-900">
-                        <span class="ib text-base text-teal-600">{&poast.title}</span>
+                    <p class="text-lg text-mint-900">
+                        <span class="ib text-lg text-teal-600">{&poast.title}</span>
                         " • "
                         {&poast.published_at}
                     </p>
                     <div class="poast-summary">
                         {poast.summary.clone().map(|summary| view! {
-                            <p class="mb-4 text-teal-400">{summary}</p>
+                            <p class="mb-4 text-lg text-teal-400">{summary}</p>
                         })}
                     </div>
                 </article>
@@ -158,7 +158,7 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
             {move || if show_details.get() {
                 view! {
                     <>
-                    <div class="poast-details absolute top-1/2 left-1/3 ml-[-2] h-auto w-72 bg-gray-600 p-4 shadow-lg rounded-sm overflow-y-auto transform -translate-y-2/3 md:transform-none md:top-10 md:left-1/2">
+                    <div class="poast-details absolute top-1/2 left-1/3 ml-[-2] h-auto w-72 bg-gray-600 p-4 shadow-lg rounded-sm overflow-y-auto transform -translate-y-2/3 md:transform-none md:top-10 md:left-1/2 z-10">
                         {
                             if let Some(full_text) = poast.full_text.clone() {
                                 view! { <p class="ii text-xs text-aqua-600">{full_text}</p> }
