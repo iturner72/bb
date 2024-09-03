@@ -143,7 +143,7 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
                         <h2 class="ib text-lg md:text-xl lg:text-2xl text-aqua-600 truncate">{&poast.company}</h2>
                     </div>
                     <div class="flex flex-col w-full space-y-0">
-                        <p class="text-sm md:text-base lg:text-lg text-mint-900 truncate">
+                        <p class="text-sm md:text-base lg:text-lg text-mint-800 truncate">
                             <span class="ib text-sm md:text-base lg:text-lg text-teal-600">{&poast.title}</span>
                         </p>
                         " • "
@@ -151,7 +151,7 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
                     </div>
                     <div class="poast-summary mt-2 w-full">
                         {poast.summary.clone().map(|summary| view! {
-                            <p class="text-sm md:text-base lg:text-lg text-teal-400 line-clamp-3">{summary}</p>
+                            <p class="text-xs md:text-sm lg:text-base text-teal-400 line-clamp-3">{summary}</p>
                         })}
                     </div>
                 </article>
@@ -164,19 +164,19 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
                             if let Some(full_text) = poast.full_text.clone() {
                                 view! { 
                                     <>
-                                        <p class="ii text-sm text-aqua-600">{full_text}</p> 
+                                        <p class="ii text-xs text-aqua-600">{full_text}</p> 
                                     </>
                                 }
                             } else if let Some(description) = poast.description.clone() {
                                 view! { 
                                     <>
-                                        <div class="ii text-sm text-aqua-600" inner_html={description}></div>
+                                        <div class="ii text-xs text-aqua-600" inner_html={description}></div>
                                     </>
                                 }
                             } else {
                                 view! {
                                     <>
-                                        <p class="ii text-sm text-gray-400">"no details available"</p> 
+                                        <p class="ii text-base text-mint-800">"no details available"</p> 
                                     </>
                                 }
                             }
