@@ -35,7 +35,7 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
     impl fmt::Display for PoastError {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {
-                PoastError::RequestError(e) => write!(f, "Request error: {}", e),
+                PoastError::RequestError(e) => write!(f, "reqwest error: {}", e),
                 PoastError::JsonParseError(e) => write!(f, "JSON parse error: {}", e),
             }
         }
@@ -45,7 +45,7 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
         ServerFnError::ServerError(e.to_string())
     }
 
-    info!("Fetching blog poasts from Supabase...");
+    info!("fetching blog poasts from supabase...");
     let client = get_client();
 
     let request = client
@@ -58,32 +58,31 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
         .execute()
         .await
         .map_err(|e| {
-            error!("Supabase request error: {}", e);
+            error!("supabase request error: {}", e);
             PoastError::RequestError(e.to_string())
         }).map_err(to_server_error)?;
 
-    info!("Received response from Supabase");
-    info!("Response status: {:?}", response.status());
+    info!("received response from Supabase");
+    info!("response status: {:?}", response.status());
     
     let body = response.text().await.map_err(|e| {
-        error!("Error reading response body: {}", e);
+        error!("error reading response body: {}", e);
         PoastError::RequestError(e.to_string())
     }).map_err(to_server_error)?;
 
-    info!("Response body length: {}", body.len());
-//    info!("Response body (first 2800 chars): {}", body.chars().take(2800).collect::<String>());
+    info!("response body length: {}", body.len());
 
     if body.trim().is_empty() {
-        error!("Empty response from Supabase");
-        return Err(ServerFnError::ServerError("Empty response from Supabase".to_string()));
+        error!("empty response from Supabase");
+        return Err(ServerFnError::ServerError("empty response from Supabase".to_string()));
     }
 
     let poasts: Vec<Poast> = from_str(&body).map_err(|e| {
         error!("JSON parse error: {}. Body: {}", e, body);
-        PoastError::JsonParseError(format!("Failed to parse JSON: {}", e))
+        PoastError::JsonParseError(format!("failed to parse JSON: {}", e))
     }).map_err(to_server_error)?;
 
-    info!("Successfully parsed {} poasts", poasts.len());
+    info!("successfully parsed {} poasts", poasts.len());
 
     Ok(poasts)
 }
@@ -110,7 +109,7 @@ pub fn Poasts() -> impl IntoView {
                                 },
                                 Err(e) => view! { 
                                     <div class="grid grid-cols-1 gap-3">
-                                        <p class="text-salmon-400">"Error loading poasts: " {e.to_string()}</p> 
+                                        <p class="text-salmon-400">"error loading poasts: " {e.to_string()}</p> 
                                     </div>
                                 },
                             }
@@ -158,14 +157,26 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
             {move || if show_details.get() {
                 view! {
                     <>
-                    <div class="poast-details absolute top-1/2 left-1/3 ml-[-2] h-auto w-72 bg-gray-600 p-4 shadow-lg rounded-sm overflow-y-auto transform -translate-y-2/3 md:transform-none md:top-10 md:left-1/2 z-10">
+                    <div class="poast-details absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 max-h-44 max-w-7/12 bg-gray-600 p-4 shadow-lg rounded-sm overflow-y-auto z-10">
                         {
                             if let Some(full_text) = poast.full_text.clone() {
-                                view! { <p class="ii text-xs text-aqua-600">{full_text}</p> }
+                                view! { 
+                                    <>
+                                        <p class="ii text-sm text-aqua-600">{full_text}</p> 
+                                    </>
+                                }
                             } else if let Some(description) = poast.description.clone() {
-                                view! { <p class="ii text-xs text-wenge-400">{description}</p> }
+                                view! { 
+                                    <>
+                                        <div class="ii text-sm text-aqua-600" inner_html={description}></div>
+                                    </>
+                                }
                             } else {
-                                view! { <p class="ii text-xs text-gray-400">"No details available"</p> }
+                                view! {
+                                    <>
+                                        <p class="ii text-sm text-gray-400">"no details available"</p> 
+                                    </>
+                                }
                             }
                         }
                     </div>
@@ -181,3 +192,4 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
         </div>
     }
 }
+
