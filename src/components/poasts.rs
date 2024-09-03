@@ -92,14 +92,14 @@ pub fn Poasts() -> impl IntoView {
     let poasts = create_resource(|| (), |_| get_poasts());
 
     view! {
-        <div class="space-y-8">
+        <div class="space-y-4">
             <Suspense fallback=|| view! { <p class="text-center text-mint-700">"chill..."</p> }>
                 {
                     move || {
                         poasts.get().map(|poasts_result| {
                             match poasts_result {
                                 Ok(poasts) => view! {
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                                         <For
                                             each=move || poasts.clone()
                                             key=|poast| poast.id
@@ -127,29 +127,31 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
 
     view! {
         <div
-            class="relative"
+            class="relative p-4"
             on:mouseenter=move |_| set_show_details(true)
             on:mouseleave=move |_| set_show_details(false)
         >
             <a 
                 href={poast.link.clone()}
-                class="block mb-24"
+                class="block"
             >
-                <article class="base-poast flex flex-col items-center cursor-pointer h-72 w-10/12 bg-gray-400 border-4 border-gray-700 hover:border-gray-800 p-6 shadow-lg hover:shadow-xl transition-all duration-0">
-                    <div class="flex items-center pb-2">
+                <article class="base-poast flex flex-col items-start cursor-pointer h-full w-full bg-gray-400 border-4 border-gray-700 hover:border-gray-800 p-4 shadow-lg hover:shadow-xl transition-all duration-0">
+                    <div class="flex items-center pb-2 max-w-1/2">
                         {poast.links.clone().and_then(|links| links.logo_url).map(|url| view! {
-                            <img src={url} alt={format!("{} logo", poast.company)} class="w-10 h-10 mr-2 rounded-sm" />
+                            <img src={url} alt={format!("{} logo", poast.company)} class="w-8 h-8 mr-2 rounded-sm" />
                         })}
-                        <h2 class="ib text-3xl text-aqua-600">{&poast.company}</h2>
+                        <h2 class="ib text-lg md:text-xl lg:text-2xl text-aqua-600 truncate">{&poast.company}</h2>
                     </div>
-                    <p class="text-lg text-mint-900">
-                        <span class="ib text-lg text-teal-600">{&poast.title}</span>
+                    <div class="flex flex-col w-full space-y-0">
+                        <p class="text-sm md:text-base lg:text-lg text-mint-900 truncate">
+                            <span class="ib text-sm md:text-base lg:text-lg text-teal-600">{&poast.title}</span>
+                        </p>
                         " • "
-                        {&poast.published_at}
-                    </p>
-                    <div class="poast-summary">
+                        <p class="text-xs md:text-sm lg:text-base text-mint-900">{&poast.published_at}</p>
+                    </div>
+                    <div class="poast-summary mt-2 w-full">
                         {poast.summary.clone().map(|summary| view! {
-                            <p class="mb-4 text-lg text-teal-400">{summary}</p>
+                            <p class="text-sm md:text-base lg:text-lg text-teal-400 line-clamp-3">{summary}</p>
                         })}
                     </div>
                 </article>
@@ -157,7 +159,7 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
             {move || if show_details.get() {
                 view! {
                     <>
-                    <div class="poast-details absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 max-h-44 max-w-7/12 bg-gray-600 p-4 shadow-lg rounded-sm overflow-y-auto z-10">
+                    <div class="poast-details absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 max-h-72 md:max-h-44 max-w-7/12 bg-gray-600 p-4 shadow-lg rounded-sm overflow-y-auto z-10">
                         {
                             if let Some(full_text) = poast.full_text.clone() {
                                 view! { 
@@ -192,4 +194,3 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
         </div>
     }
 }
-
