@@ -164,18 +164,20 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
                         {poast.links.clone().and_then(|links| links.logo_url).map(|url| view! {
                             <img src={url} alt={format!("{} logo", poast.company)} class="w-8 h-8 mr-2 rounded-sm" />
                         })}
-                        <h2 class="ib text-lg md:text-xl lg:text-2xl text-purple-100 truncate">{&poast.company}</h2>
+                        <h2 class="ib text-sm md:text-base lg:text-lg text-purple-100 truncate">{&poast.company}</h2>
                     </div>
-                    <div class="flex flex-col w-full space-y-0">
-                        <p class="text-sm md:text-base lg:text-lg text-mint-800 truncate">
-                            <span class="ib text-sm md:text-base lg:text-lg text-teal-100">{&poast.title}</span>
+                    <div class="poast-headings flex flex-col w-full space-y-0">
+                        <p class="text-sm md:text-base lg:text-lg text-mint-800">
+                            <span class="ib text-sm md:text-base lg:text-lg text-teal-100 line-clamp-1 md:line-clamp-2 lg:line-clamp-2">
+                                {&poast.title}
+                            </span>
                         </p>
                         " • "
                         <p class="text-xs md:text-sm lg:text-base text-gray-500">{&poast.published_at}</p>
                     </div>
                     <div class="poast-summary mt-2 w-full">
                         {poast.summary.clone().map(|summary| view! {
-                            <p class="text-xs md:text-sm lg:text-base text-gray-200 line-clamp-3">{summary}</p>
+                            <p class="text-xs md:text-sm lg:text-base text-gray-200 line-clamp-2 md:line-clamp-3 lg:line-clamp-4">{summary}</p>
                         })}
                     </div>
                 </article>
@@ -183,7 +185,7 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
             {move || if show_details.get() {
                 view! {
                     <>
-                    <div class="poast-details absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 max-h-72 md:max-h-44 max-w-7/12 bg-gray-800 p-4 shadow-lg rounded-sm overflow-y-auto z-10 border-teal-700">
+                    <div class="poast-details bottom-0 max-h-96 bg-gray-800 p-4 shadow-lg rounded-sm overflow-y-auto z-10 border-teal-700">
                         {
                             if let Some(full_text) = poast.full_text.clone() {
                                 view! { 
