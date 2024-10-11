@@ -25,6 +25,12 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
     use serde_json::from_str;
     use std::fmt;
     use log::{info, error};
+    use once_cell::sync::Lazy;
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+
+    static CACHE: Lazy<Mutex<(Option<Vec<Poast>>, Instant)>> = Lazy::new(|| Mutex::new((None, Instant::now())));
+    const CACHE_DURATION: Duration = Duration::from_secs(3600);
 
     #[derive(Debug)]
     enum PoastError {
@@ -43,6 +49,18 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
     
     fn to_server_error(e: PoastError) -> ServerFnError {
         ServerFnError::ServerError(e.to_string())
+    }
+
+    let cache_duration = CACHE_DURATION;
+    let cached_data = CACHE.lock().unwrap().clone();
+
+    // check cache
+    if let (Some(cached_poasts), last_fetch) = cached_data {
+        if last_fetch.elapsed() < cache_duration {
+            info!("Returning cached poasts");
+            info!("Cache debug: {:?}", (cached_poasts.len(), last_fetch));
+            return Ok(cached_poasts);
+        }
     }
 
     info!("fetching blog poasts from supabase...");
@@ -84,6 +102,12 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
 
     info!("successfully parsed {} poasts", poasts.len());
 
+    // update cache
+    {
+        let mut cache = CACHE.lock().unwrap();
+        *cache = (Some(poasts.clone()), Instant::now());
+    }
+
     Ok(poasts)
 }
 
@@ -93,7 +117,7 @@ pub fn Poasts() -> impl IntoView {
 
     view! {
         <div class="space-y-4">
-            <Suspense fallback=|| view! { <p class="text-center text-mint-700">"chill..."</p> }>
+            <Suspense fallback=|| view! { <p class="text-center text-teal-100">"chill..."</p> }>
                 {
                     move || {
                         poasts.get().map(|poasts_result| {
@@ -109,7 +133,7 @@ pub fn Poasts() -> impl IntoView {
                                 },
                                 Err(e) => view! { 
                                     <div class="grid grid-cols-1 gap-3">
-                                        <p class="text-salmon-400">"error loading poasts: " {e.to_string()}</p> 
+                                        <p class="text-salmon-600">"error loading poasts: " {e.to_string()}</p> 
                                     </div>
                                 },
                             }
@@ -135,23 +159,23 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
                 href={poast.link.clone()}
                 class="block"
             >
-                <article class="base-poast flex flex-col items-start cursor-pointer h-full w-full bg-gray-400 border-4 border-gray-700 hover:border-gray-800 p-4 shadow-lg hover:shadow-xl transition-all duration-0">
+                <article class="base-poast flex flex-col items-start cursor-pointer h-full w-full bg-gray-900 border-4 border-gray-700 hover:border-gray-800 p-4 shadow-lg hover:shadow-xl transition-all duration-0">
                     <div class="flex items-center pb-2 max-w-1/2">
                         {poast.links.clone().and_then(|links| links.logo_url).map(|url| view! {
                             <img src={url} alt={format!("{} logo", poast.company)} class="w-8 h-8 mr-2 rounded-sm" />
                         })}
-                        <h2 class="ib text-lg md:text-xl lg:text-2xl text-aqua-600 truncate">{&poast.company}</h2>
+                        <h2 class="ib text-lg md:text-xl lg:text-2xl text-purple-100 truncate">{&poast.company}</h2>
                     </div>
                     <div class="flex flex-col w-full space-y-0">
                         <p class="text-sm md:text-base lg:text-lg text-mint-800 truncate">
-                            <span class="ib text-sm md:text-base lg:text-lg text-teal-600">{&poast.title}</span>
+                            <span class="ib text-sm md:text-base lg:text-lg text-teal-100">{&poast.title}</span>
                         </p>
                         " • "
-                        <p class="text-xs md:text-sm lg:text-base text-mint-900">{&poast.published_at}</p>
+                        <p class="text-xs md:text-sm lg:text-base text-gray-500">{&poast.published_at}</p>
                     </div>
                     <div class="poast-summary mt-2 w-full">
                         {poast.summary.clone().map(|summary| view! {
-                            <p class="text-xs md:text-sm lg:text-base text-teal-400 line-clamp-3">{summary}</p>
+                            <p class="text-xs md:text-sm lg:text-base text-gray-200 line-clamp-3">{summary}</p>
                         })}
                     </div>
                 </article>
@@ -159,24 +183,24 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
             {move || if show_details.get() {
                 view! {
                     <>
-                    <div class="poast-details absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 max-h-72 md:max-h-44 max-w-7/12 bg-gray-600 p-4 shadow-lg rounded-sm overflow-y-auto z-10">
+                    <div class="poast-details absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 max-h-72 md:max-h-44 max-w-7/12 bg-gray-800 p-4 shadow-lg rounded-sm overflow-y-auto z-10 border-teal-700">
                         {
                             if let Some(full_text) = poast.full_text.clone() {
                                 view! { 
                                     <>
-                                        <p class="ii text-xs text-aqua-600">{full_text}</p> 
+                                        <p class="ii text-xs text-gray-100">{full_text}</p> 
                                     </>
                                 }
                             } else if let Some(description) = poast.description.clone() {
                                 view! { 
                                     <>
-                                        <div class="ii text-xs text-aqua-600" inner_html={description}></div>
+                                        <div class="ii text-xs text-gray-100" inner_html={description}></div>
                                     </>
                                 }
                             } else {
                                 view! {
                                     <>
-                                        <p class="ii text-base text-mint-800">"no details available"</p> 
+                                        <p class="ii text-base text-teal-300">"no details available"</p> 
                                     </>
                                 }
                             }
