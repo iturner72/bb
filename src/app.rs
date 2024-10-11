@@ -40,13 +40,19 @@ pub fn App() -> impl IntoView {
 #[component]
 fn HomePage() -> impl IntoView {
     view! {
-        <div class ="w-full mx-auto pl-2">
+        <div class="w-full mx-auto pl-2">
             <div class="flex justify-between items-center">
                 <h1 class="text-3xl text-left text-purple-200 ib pl-4 p-4">"bryptoblogs"</h1>
-                <a href="https://github.com/iturner72/bb" class="text-purple-400 ib pr-4">"github"</a>
+                <a 
+                    href="https://github.com/iturner72/bb" 
+                    class="text-purple-400 ib pr-4"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    "github"
+                </a>
             </div>
             <Poasts/>
         </div>
     }
 }
-
