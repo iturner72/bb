@@ -68,10 +68,10 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
 
     let request = client
         .from("poasts")
-        .select("*, links!posts_company_fkey(logo_url)")
+        .select("id, published_at, company, title, link, description, summary, links!posts_company_fkey(logo_url)") // Exclude full_text
         .order("published_at.desc")
         .limit(5);
-    
+
     let response = request
         .execute()
         .await
