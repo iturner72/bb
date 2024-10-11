@@ -68,7 +68,7 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
 
     let request = client
         .from("poasts")
-        .select("id, published_at, company, title, link, description, summary, links!posts_company_fkey(logo_url)") // Exclude full_text
+        .select("id, published_at, company, title, link, summary, links!posts_company_fkey(logo_url)")
         .order("published_at.desc")
         .limit(5);
 
@@ -147,13 +147,9 @@ pub fn Poasts() -> impl IntoView {
 
 #[component]
 pub fn BlogPoast(poast: Poast) -> impl IntoView {
-    let (show_details, set_show_details) = create_signal(false);
-
     view! {
         <div
             class="relative p-4"
-            on:mouseenter=move |_| set_show_details(true)
-            on:mouseleave=move |_| set_show_details(false)
         >
             <a 
                 href={poast.link.clone()}
@@ -182,41 +178,6 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
                     </div>
                 </article>
             </a>
-            {move || if show_details.get() {
-                view! {
-                    <>
-                    <div class="poast-details bottom-0 max-h-96 bg-gray-800 p-4 shadow-lg rounded-sm overflow-y-auto z-10 border-teal-700">
-                        {
-                            if let Some(full_text) = poast.full_text.clone() {
-                                view! { 
-                                    <>
-                                        <p class="ii text-xs text-gray-100">{full_text}</p> 
-                                    </>
-                                }
-                            } else if let Some(description) = poast.description.clone() {
-                                view! { 
-                                    <>
-                                        <div class="ii text-xs text-gray-100" inner_html={description}></div>
-                                    </>
-                                }
-                            } else {
-                                view! {
-                                    <>
-                                        <p class="ii text-base text-teal-300">"no details available"</p> 
-                                    </>
-                                }
-                            }
-                        }
-                    </div>
-                    </>
-                }
-            } else {
-                view! {
-                    <>
-                        <div class="w-max-0"></div>
-                    </>
-                }
-            }}
         </div>
     }
 }
