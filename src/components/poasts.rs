@@ -174,6 +174,8 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
             <a 
                 href={poast.link.clone()}
                 class="block"
+                target="_blank"
+                rel="noopener noreferrer"
             >
                 <article class="base-poast flex flex-col items-start cursor-pointer h-full w-full bg-gray-900 border-4 border-gray-700 hover:border-gray-800 p-4 shadow-lg hover:shadow-xl transition-all duration-0">
                     <div class="flex items-center pb-2 max-w-1/2">
