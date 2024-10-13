@@ -1,7 +1,7 @@
 use leptos::*;
 use serde::{Serialize, Deserialize};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Poast {
     pub id: i32,
     pub published_at: String,
@@ -14,7 +14,7 @@ pub struct Poast {
     pub links: Option<Links>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Links {
     pub logo_url: Option<String>,
 }
@@ -114,32 +114,52 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
 #[component]
 pub fn Poasts() -> impl IntoView {
     let poasts = create_resource(|| (), |_| get_poasts());
+    let (search_query, set_search_query) = create_signal(String::new());
+    let (filtered_poasts, set_filtered_poasts) = create_signal(vec![]);
+
+    create_effect(move |_| {
+        let query = search_query().to_lowercase();
+        poasts.with(|poasts_result| {
+            match poasts_result {
+                Some(Ok(poasts)) => {
+                    let filtered = poasts.iter()
+                        .filter(|poast| poast.company.to_lowercase().contains(&query))
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    set_filtered_poasts(filtered);
+                },
+                _ => set_filtered_poasts(vec![]),
+            }
+        });
+    });
 
     view! {
         <div class="space-y-4">
+            <div class="flex justify-start mb-4 pl-4">
+                <input
+                    type="text"
+                    placeholder="filter by company..."
+                    on:input=move |ev| set_search_query(event_target_value(&ev))
+                    class="w-1/6 p-2 rounded bg-gray-800 text-mint-700 border border-gray-700 focus:border-teal-500 focus:outline-none"
+                />
+            </div>
             <Suspense fallback=|| view! { <p class="text-center text-teal-100">"chill..."</p> }>
-                {
-                    move || {
-                        poasts.get().map(|poasts_result| {
-                            match poasts_result {
-                                Ok(poasts) => view! {
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                                        <For
-                                            each=move || poasts.clone()
-                                            key=|poast| poast.id
-                                            children=move |poast| view! { <BlogPoast poast=poast /> }
-                                        />
-                                    </div>
-                                },
-                                Err(e) => view! { 
-                                    <div class="grid grid-cols-1 gap-3">
-                                        <p class="text-salmon-600">"error loading poasts: " {e.to_string()}</p> 
-                                    </div>
-                                },
-                            }
-                        })
+                {move || {
+                    let poasts = filtered_poasts();
+                    if poasts.is_empty() {
+                        view! { <div class="text-center text-salmon-600">"No poasts found"</div> }
+                    } else {
+                        view! {
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                                <For
+                                    each=move || poasts.clone()
+                                    key=|poast| poast.id
+                                    children=move |poast| view! { <BlogPoast poast=poast /> }
+                                />
+                            </div>
+                        }
                     }
-                }
+                }}
             </Suspense>
         </div>
     }
