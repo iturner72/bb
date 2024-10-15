@@ -2,7 +2,7 @@
 /*
     * run this 
     * npx tailwindcss -i ./style/tailwind.css -o ./style/output.css --watch
-    * */
+    */
 module.exports = {
     content: {
         files: ["*.html", "./src/**/*.rs"],
@@ -13,32 +13,85 @@ module.exports = {
         transparent: 'transparent',
         current: 'currentColor',
         'white': '#ffffff',
-
-        'gray': { DEFAULT: '#DCE9E6', 900: '#233833', 800: '#467066', 700: '#6da497', 600: '#a5c6bf', 500: '#dce9e6', 400: '#e3eeeb', 300: '#eaf2f0', 200: '#f1f6f5', 100: '#f8fbfa' }, 
-
-        'teal': { DEFAULT: '#042F2E', 900: '#010909', 800: '#021312', 700: '#021c1c', 600: '#032625', 500: '#042f2e', 400: '#0b8381', 300: '#13d8d5', 200: '#56f0ee', 100: '#abf8f6' }, 
-
-        'salmon': { DEFAULT: '#FDA4AF', 900: '#52020b', 800: '#a40316', 700: '#f60521', 600: '#fb5367', 500: '#fda4af', 400: '#feb7bf', 300: '#fec9cf', 200: '#fedbdf', 100: '#ffedef' }, 
-
-        'mint': { DEFAULT: '#CCFBF1', 900: '#075443', 800: '#0ea887', 700: '#23edc1', 600: '#77f4d9', 500: '#ccfbf1', 400: '#d5fcf3', 300: '#e0fcf6', 200: '#eafdf9', 100: '#f5fefc' },
-
-        'purple': { DEFAULT: '#7F7FA8', 900: '#181823', 800: '#303046', 700: '#48486a', 600: '#60608d', 500: '#7f7fa8', 400: '#9999ba', 300: '#b3b3cb', 200: '#ccccdc', 100: '#e6e6ee' }, 
-
-        'blue': { DEFAULT: '#446784', 900: '#0e151a', 800: '#1b2935', 700: '#293e4f', 600: '#365269', 500: '#446784', 400: '#5b87aa', 300: '#84a5c0', 200: '#adc3d5', 100: '#d6e1ea' },
-
-        'wenge': { DEFAULT: '#715F58', 900: '#161312', 800: '#2d2623', 700: '#433935', 600: '#594b46', 500: '#715f58', 400: '#917c74', 300: '#ad9d96', 200: '#c8beb9', 100: '#e4dedc' }, 
-
-        'aqua': { DEFAULT: '#00AAA8', 900: '#002221', 800: '#004342', 700: '#006563', 600: '#008784', 500: '#00aaa8', 400: '#00ede9', 300: '#32fffc', 200: '#76fffd', 100: '#bbfffe' },
-
-        'pistachio': { DEFAULT: '#99F7AF', 900: '#064a16', 800: '#0c932b', 700: '#12dd41', 600: '#4ef174', 500: '#99f7af', 400: '#acf8be', 300: '#c1face', 200: '#d5fcde', 100: '#eafdef' }, 
-
-        'seafoam': { DEFAULT: '#206D5F', 900: '#061613', 800: '#0d2c27', 700: '#13423a', 600: '#1a594d', 500: '#206d5f', 400: '#31a892', 300: '#54cdb7', 200: '#8ddecf', 100: '#c6eee7' },
-
+        'ucla-blue': {
+          DEFAULT: '#2375A7',
+          100: '#071722',
+          200: '#0e2f43',
+          300: '#154665',
+          400: '#1d5e87',
+          500: '#2375a7',
+          600: '#3597d4',
+          700: '#68b1df',
+          800: '#9acbea',
+          900: '#cde5f4'
+        },
+        'dark-purple': {
+          DEFAULT: '#401830',
+          100: '#0d0509',
+          200: '#190a13',
+          300: '#260e1c',
+          400: '#321326',
+          500: '#401830',
+          600: '#7c2f5d',
+          700: '#b9478b',
+          800: '#d084b2',
+          900: '#e8c2d8'
+        },
+        'celestial-blue': {
+          DEFAULT: '#4E97D1',
+          100: '#0c1e2d',
+          200: '#173c5b',
+          300: '#235b88',
+          400: '#2f79b6',
+          500: '#4e97d1',
+          600: '#70abda',
+          700: '#94c0e3',
+          800: '#b8d5ed',
+          900: '#dbeaf6'
+        },
+        'tyrian-purple': {
+          DEFAULT: '#682146',
+          100: '#15070e',
+          200: '#2a0d1c',
+          300: '#3f142a',
+          400: '#541a38',
+          500: '#682146',
+          600: '#a1336c',
+          700: '#c95591',
+          800: '#db8eb6',
+          900: '#edc6da'
+        },
+        'rich-black': {
+          DEFAULT: '#0F0D19',
+          100: '#030205',
+          200: '#060509',
+          300: '#08070e',
+          400: '#0b0a13',
+          500: '#0f0d19',
+          600: '#332c56',
+          700: '#594d95',
+          800: '#8c82be',
+          900: '#c5c0df'
+        }
       },
-      extend: {},
+      extend: {
+          height: {
+              '108': '26rem',
+              '128': '32rem',
+              '172': '64rem',
+          },
+          backgroundImage: {
+            'gradient-top': 'linear-gradient(0deg, #0F0D19, #401830, #2375A7, #4E97D1, #682146)',
+            'gradient-right': 'linear-gradient(90deg, #0F0D19, #401830, #2375A7, #4E97D1, #682146)',
+            'gradient-bottom': 'linear-gradient(180deg, #0F0D19, #401830, #2375A7, #4E97D1, #682146)',
+            'gradient-left': 'linear-gradient(270deg, #0F0D19, #401830, #2375A7, #4E97D1, #682146)',
+            'gradient-top-right': 'linear-gradient(45deg, #0F0D19, #401830, #2375A7, #4E97D1, #682146)',
+            'gradient-bottom-right': 'linear-gradient(135deg, #0F0D19, #401830, #2375A7, #4E97D1, #682146)',
+            'gradient-top-left': 'linear-gradient(225deg, #0F0D19, #401830, #2375A7, #4E97D1, #682146)',
+            'gradient-bottom-left': 'linear-gradient(315deg, #0F0D19, #401830, #2375A7, #4E97D1, #682146)',
+            'gradient-radial': 'radial-gradient(#0F0D19, #401830, #2375A7, #4E97D1, #682146)',
+          },
+      },
     },
     plugins: [],
 }
-
-
-

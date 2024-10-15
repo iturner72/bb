@@ -140,14 +140,14 @@ pub fn Poasts() -> impl IntoView {
                     type="text"
                     placeholder="filter by company..."
                     on:input=move |ev| set_search_query(event_target_value(&ev))
-                    class="w-1/6 p-2 rounded bg-gray-800 text-mint-700 border border-gray-700 focus:border-teal-500 focus:outline-none"
+                    class="w-1/6 p-2 rounded bg-rich-black-300 text-celestial-blue-100 border border-ucla-blue-600 focus:border-celestial-blue-400 focus:outline-none placeholder-celestial-blue-700"
                 />
             </div>
-            <Suspense fallback=|| view! { <p class="text-center text-teal-100">"chill..."</p> }>
+            <Suspense fallback=|| view! { <p class="text-center text-celestial-blue-400">"chill..."</p> }>
                 {move || {
                     let poasts = filtered_poasts();
                     if poasts.is_empty() {
-                        view! { <div class="text-center text-salmon-600">"No poasts found"</div> }
+                        view! { <div class="text-center text-tyrian-purple-400">"No poasts found"</div> }
                     } else {
                         view! {
                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -177,25 +177,25 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
                 target="_blank"
                 rel="noopener noreferrer"
             >
-                <article class="base-poast flex flex-col items-start cursor-pointer h-full w-full bg-gray-900 border-4 border-gray-700 hover:border-gray-800 p-4 shadow-lg hover:shadow-xl transition-all duration-0">
+                <article class="base-poast flex flex-col items-start cursor-pointer h-full w-full bg-rich-black border-4 border-oxford-blue hover:border-ucla-blue p-4 shadow-lg hover:shadow-xl transition-all duration-0">
                     <div class="flex items-center pb-2 max-w-1/2">
                         {poast.links.clone().and_then(|links| links.logo_url).map(|url| view! {
                             <img src={url} alt={format!("{} logo", poast.company)} class="w-8 h-8 mr-2 rounded-sm" />
                         })}
-                        <h2 class="ib text-sm md:text-base lg:text-lg text-purple-100 truncate">{&poast.company}</h2>
+                        <h2 class="ib text-sm md:text-base lg:text-lg text-celestial-blue truncate">{&poast.company}</h2>
                     </div>
                     <div class="poast-headings flex flex-col w-full space-y-0">
-                        <p class="text-sm md:text-base lg:text-lg text-mint-800">
-                            <span class="ib text-sm md:text-base lg:text-lg text-teal-100 line-clamp-1 md:line-clamp-2 lg:line-clamp-2">
+                        <p class="text-sm md:text-base lg:text-lg text-ucla-blue">
+                            <span class="ib text-sm md:text-base lg:text-lg text-celestial-blue line-clamp-1 md:line-clamp-2 lg:line-clamp-2">
                                 {&poast.title}
                             </span>
                         </p>
                         " • "
-                        <p class="text-xs md:text-sm lg:text-base text-gray-500">{&poast.published_at}</p>
+                        <p class="text-xs md:text-sm lg:text-base text-tyrian-purple">{&poast.published_at}</p>
                     </div>
                     <div class="poast-summary mt-2 w-full">
                         {poast.summary.clone().map(|summary| view! {
-                            <p class="text-xs md:text-sm lg:text-base text-gray-200 line-clamp-2 md:line-clamp-3 lg:line-clamp-4">{summary}</p>
+                            <p class="text-xs md:text-sm lg:text-base text-celestial-blue line-clamp-2 md:line-clamp-3 lg:line-clamp-4">{summary}</p>
                         })}
                     </div>
                 </article>
