@@ -13,7 +13,7 @@ module.exports = {
         transparent: 'transparent',
         current: 'currentColor',
         'white': '#ffffff',
-        'ucla-blue': {
+        'blue': {
           DEFAULT: '#2375A7',
           100: '#071722',
           200: '#0e2f43',
@@ -37,7 +37,7 @@ module.exports = {
           800: '#d084b2',
           900: '#e8c2d8'
         },
-        'celestial-blue': {
+        'also-blue': {
           DEFAULT: '#4E97D1',
           100: '#0c1e2d',
           200: '#173c5b',
@@ -49,7 +49,7 @@ module.exports = {
           800: '#b8d5ed',
           900: '#dbeaf6'
         },
-        'tyrian-purple': {
+        'purple': {
           DEFAULT: '#682146',
           100: '#15070e',
           200: '#2a0d1c',
@@ -61,7 +61,7 @@ module.exports = {
           800: '#db8eb6',
           900: '#edc6da'
         },
-        'rich-black': {
+        'vader': {
           DEFAULT: '#0F0D19',
           100: '#030205',
           200: '#060509',

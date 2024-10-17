@@ -40,12 +40,12 @@ pub fn App() -> impl IntoView {
 #[component]
 fn HomePage() -> impl IntoView {
     view! {
-        <div class="w-full mx-auto pl-2 bg-rich-black-100">
+        <div class="w-full mx-auto pl-2 bg-vader-100">
             <div class="flex justify-between items-center">
-                <h1 class="text-3xl text-left text-celestial-blue-600 ib pl-4 p-4 font-bold">"bryptoblogs"</h1>
+                <h1 class="text-3xl text-left text-also-blue-600 ib pl-4 p-4 font-bold">"bryptoblogs"</h1>
                 <a 
                     href="https://github.com/iturner72/bb" 
-                    class="text-ucla-blue-400 ib pr-4 hover:text-celestial-blue-300 transition-colors duration-200"
+                    class="text-blue-400 ib pr-4 hover:text-also-blue-300 transition-colors duration-200"
                     target="_blank"
                     rel="noopener noreferrer"
                 >
