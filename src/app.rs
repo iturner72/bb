@@ -3,6 +3,7 @@ use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
 use crate::components::poasts::Poasts;
+use crate::components::dark_mode_toggle::DarkModeToggle;
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -40,17 +41,20 @@ pub fn App() -> impl IntoView {
 #[component]
 fn HomePage() -> impl IntoView {
     view! {
-        <div class="w-full mx-auto pl-2 bg-vader-100">
+        <div class="w-full mx-auto pl-2 bg-gray-100 dark:bg-teal-900">
             <div class="flex justify-between items-center">
-                <h1 class="text-3xl text-left text-also-blue-600 ib pl-4 p-4 font-bold">"bryptoblogs"</h1>
-                <a 
-                    href="https://github.com/iturner72/bb" 
-                    class="text-blue-400 ib pr-4 hover:text-also-blue-300 transition-colors duration-200"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                >
-                    "github"
-                </a>
+                <h1 class="text-3xl text-left text-seafoam-600 dark:text-mint-400 ib pl-4 p-4 font-bold">"bryptoblogs"</h1>
+                <div class="items-end pr-4">
+                    <a 
+                        href="https://github.com/iturner72/bb" 
+                        class="text-teal-600 dark:text-aqua-400 ib pr-4 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors duration-200"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        "github"
+                    </a>
+                    <DarkModeToggle />
+                </div>
             </div>
             <Poasts/>
         </div>

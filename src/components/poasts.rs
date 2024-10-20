@@ -138,19 +138,19 @@ pub fn Poasts() -> impl IntoView {
             <div class="flex justify-start mb-4 pl-4">
                 <input
                     type="text"
-                    placeholder="filter by company..."
+                    placeholder="Filter by company..."
                     on:input=move |ev| set_search_query(event_target_value(&ev))
-                    class="w-1/6 p-2 rounded bg-vader-300 text-also-blue-100 border border-blue-600 focus:border-also-blue-400 focus:outline-none placeholder-also-blue-700"
+                    class="w-1/6 p-2 rounded-md bg-gray-100 dark:bg-teal-800 text-gray-800 dark:text-gray-200 border border-teal-500 dark:border-seafoam-500 focus:border-seafoam-600 dark:focus:border-aqua-400 focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400 placeholder-gray-500 dark:placeholder-gray-400"
                 />
             </div>
-            <Suspense fallback=|| view! { <p class="text-center text-also-blue-400">"chill..."</p> }>
+            <Suspense fallback=|| view! { <p class="text-center text-teal-600 dark:text-aqua-400">"Loading..."</p> }>
                 {move || {
                     let poasts = filtered_poasts();
                     if poasts.is_empty() {
-                        view! { <div class="text-center text-purple-400">"No poasts found"</div> }
+                        view! { <div class="text-center text-gray-500 dark:text-gray-400">"No posts found"</div> }
                     } else {
                         view! {
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                 <For
                                     each=move || poasts.clone()
                                     key=|poast| poast.id
@@ -168,34 +168,31 @@ pub fn Poasts() -> impl IntoView {
 #[component]
 pub fn BlogPoast(poast: Poast) -> impl IntoView {
     view! {
-        <div
-            class="relative p-4"
-        >
+        <div class="relative p-4">
             <a 
                 href={poast.link.clone()}
                 class="block"
                 target="_blank"
                 rel="noopener noreferrer"
             >
-                <article class="base-poast flex flex-col items-start cursor-pointer h-full w-full bg-vader border-4 border-oxford-blue hover:border-blue p-4 shadow-lg hover:shadow-xl transition-all duration-0">
+                <article class="base-poast flex flex-col items-start cursor-pointer h-full w-full bg-white dark:bg-teal-800 border-2 border-gray-200 dark:border-teal-700 hover:border-seafoam-500 dark:hover:border-aqua-500 p-4 rounded-lg shadow-md hover:shadow-lg transition-all duration-300">
                     <div class="flex items-center pb-2 max-w-1/2">
                         {poast.links.clone().and_then(|links| links.logo_url).map(|url| view! {
                             <img src={url} alt={format!("{} logo", poast.company)} class="w-8 h-8 mr-2 rounded-sm" />
                         })}
-                        <h2 class="ib text-sm md:text-base lg:text-lg text-also-blue truncate">{&poast.company}</h2>
+                        <h2 class="text-sm md:text-base lg:text-lg text-teal-600 dark:text-mint-400 font-semibold truncate">{&poast.company}</h2>
                     </div>
-                    <div class="poast-headings flex flex-col w-full space-y-0">
-                        <p class="text-sm md:text-base lg:text-lg text-blue">
-                            <span class="ib text-sm md:text-base lg:text-lg text-also-blue line-clamp-1 md:line-clamp-2 lg:line-clamp-2">
+                    <div class="poast-headings flex flex-col w-full space-y-1">
+                        <p class="text-sm md:text-base lg:text-lg text-gray-800 dark:text-gray-200">
+                            <span class="text-sm md:text-base lg:text-lg text-seafoam-600 dark:text-aqua-400 line-clamp-1 md:line-clamp-2 lg:line-clamp-2 font-medium">
                                 {&poast.title}
                             </span>
                         </p>
-                        " • "
-                        <p class="text-xs md:text-sm lg:text-base text-purple-400">{&poast.published_at}</p>
+                        <p class="text-xs md:text-sm lg:text-base text-gray-500 dark:text-gray-400">{&poast.published_at}</p>
                     </div>
                     <div class="poast-summary mt-2 w-full">
                         {poast.summary.clone().map(|summary| view! {
-                            <p class="text-xs md:text-sm lg:text-base text-also-blue line-clamp-2 md:line-clamp-3 lg:line-clamp-4">{summary}</p>
+                            <p class="text-xs md:text-sm lg:text-base text-gray-600 dark:text-gray-300 line-clamp-2 md:line-clamp-3 lg:line-clamp-4">{summary}</p>
                         })}
                     </div>
                 </article>
