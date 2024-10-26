@@ -1,6 +1,5 @@
 #[cfg(feature = "ssr")]
 pub mod server {
-    use chrono::DateTime;
     use feed_rs::parser;
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
@@ -116,6 +115,26 @@ pub mod server {
                 let insights = get_post_insights(&openai, &title, &full_text).await?;
                 
                 // Insert post...
+                let post = BlogPost {
+                    published_at: entry.published
+                        .map(|d| d.format("%Y-%m-%d").to_string())
+                        .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%d").to_string()),
+                    company: link_info.company.clone(),
+                    title: title.clone(),
+                    link: entry_link,
+                    description: entry.summary.map(|s| s.content),
+                    summary: Some(insights.summary),
+                    full_text: Some(full_text),
+                    buzzwords: Some(insights.buzzwords),
+                };
+
+                let post_json = serde_json::to_string(&post)?;
+                supabase
+                    .from("poasts")
+                    .insert(post_json)
+                    .execute()
+                    .await?;
+
                 company_progress.new_posts += 1;
                 progress_sender.lock().unwrap().try_send(company_progress.clone())?;
             }
@@ -280,25 +299,6 @@ pub mod server {
         
         let insights: PostInsights = serde_json::from_str(&content)?;
         Ok(insights)
-    }
-
-    fn extract_post_data(entry: &feed_rs::model::Entry, company: &str) -> Result<BlogPost, Box<dyn Error>> {
-        let published = entry.published.unwrap_or(entry.updated.unwrap_or_default());
-        let published_at = DateTime::from_timestamp(published.timestamp(), 0)
-            .unwrap_or_default()
-            .format("%Y-%m-%d")
-            .to_string();
-
-        Ok(BlogPost {
-            published_at,
-            company: company.to_string(),
-            title: entry.title.as_ref().map(|t| t.content.clone()).unwrap_or_default(),
-            link: entry.links.first().map(|l| l.href.clone()).unwrap_or_default(),
-            description: entry.summary.as_ref().map(|s| s.content.clone()),
-            summary: None,
-            full_text: None,
-            buzzwords: None,
-        })
     }
 }
 
