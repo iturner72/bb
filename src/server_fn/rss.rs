@@ -1,38 +1,43 @@
+// src/server_fn/rss.rs
 use leptos::*;
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RssFetchProgress {
+pub struct RssProgressUpdate {
     pub company: String,
     pub status: String,
     pub new_posts: i32,
     pub skipped_posts: i32,
+    pub current_post: Option<String>, // Add title of current post being processed
 }
 
-#[server(TriggerRssFetch, "/api")]
-pub async fn trigger_rss_fetch() -> Result<Vec<RssFetchProgress>, ServerFnError> {
+#[server(TriggerRssFetchStream, "/api")]
+pub async fn trigger_rss_fetch_stream() -> Result<Vec<RssProgressUpdate>, ServerFnError> {
     #[cfg(feature = "ssr")]
     {
-        log::info!("Starting manual RSS feed fetch...");
+        use futures::StreamExt;
         
-        match crate::rss_service::server::process_feeds().await {
-            Ok(feed_results) => {
-                let progress = feed_results.into_iter()
-                    .map(|result| RssFetchProgress {
-                        company: result.company,
-                        status: "completed".to_string(),
-                        new_posts: result.new_posts,
-                        skipped_posts: result.skipped_posts,
-                    })
-                    .collect();
-                Ok(progress)
-            },
-            Err(e) => {
-                log::error!("Error processing RSS feeds: {}", e);
-                Err(ServerFnError::ServerError(format!("Failed to process RSS feeds: {}", e)))
+        log::info!("Starting manual RSS feed fetch with streaming...");
+        let (sender, mut receiver) = futures::channel::mpsc::channel(100);
+        let sender = std::sync::Arc::new(std::sync::Mutex::new(sender));
+        
+        // Start the feed processing in a separate task
+        let processing = tokio::spawn(async move {
+            match crate::rss_service::server::process_feeds_with_progress(sender).await {
+                Ok(_) => log::info!("Feed processing completed"),
+                Err(e) => log::error!("Feed processing error: {}", e),
             }
+        });
+
+        // Collect all updates
+        let mut updates = Vec::new();
+        while let Some(update) = receiver.next().await {
+            updates.push(update);
         }
+
+        // Wait for processing to complete
+        let _ = processing.await;
+        Ok(updates)
     }
 
     #[cfg(not(feature = "ssr"))]

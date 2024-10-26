@@ -15,6 +15,8 @@ cfg-if = "1.0.0"
 dotenv = { version = "0.15.0", optional = false }
 env_logger = { version = "0.9", optional = false }
 feed-rs = { version = "2.1.1", optional = true }
+futures = { version = "0.3.30", optional = true }
+futures-util = { version = "0.3.30", optional = true }
 leptos = { version = "0.6", features = ["nightly"] }
 leptos_axum = { version = "0.6", optional = true }
 leptos_meta = { version = "0.6", features = ["nightly"] }
@@ -41,6 +43,8 @@ ssr = [
     "dep:async-openai",
     "dep:axum",
     "dep:feed-rs",
+    "dep:futures",
+    "dep:futures-util",
     "dep:tokio",
     "dep:tower",
     "dep:tower-http",

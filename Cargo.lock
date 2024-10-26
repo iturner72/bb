@@ -298,6 +298,8 @@ dependencies = [
  "dotenv",
  "env_logger",
  "feed-rs",
+ "futures",
+ "futures-util",
  "http 1.1.0",
  "leptos",
  "leptos_axum",

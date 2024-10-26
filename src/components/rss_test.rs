@@ -1,10 +1,10 @@
 use leptos::*;
 use leptos_router::ActionForm;
-use crate::server_fn::{TriggerRssFetch, RssFetchProgress};
+use crate::server_fn::TriggerRssFetchStream;
 
 #[component]
 pub fn RssTest() -> impl IntoView {
-    let trigger_action = create_server_action::<TriggerRssFetch>();
+    let trigger_action = create_server_action::<TriggerRssFetchStream>();
     
     view! {
         <div class="p-4 space-y-4">
@@ -20,21 +20,34 @@ pub fn RssTest() -> impl IntoView {
             {move || {
                 trigger_action.value().get().map(|result| {
                     match result {
-                        Ok(progress) => view! {
+                        Ok(updates) => view! {
                             <div class="mt-4 space-y-2">
                                 <h3 class="text-lg font-semibold text-gray-200">Feed Processing Results</h3>
                                 <div class="grid gap-3">
-                                    {progress.into_iter().map(|p| view! {
-                                        <div class="bg-gray-800 p-3 rounded-lg">
-                                            <div class="flex justify-between items-center">
-                                                <span class="text-purple-300 font-medium">{p.company}</span>
-                                                <span class="text-teal-400 text-sm">{"Status: "} {p.status}</span>
+                                    {updates.into_iter().map(|update| {
+                                        let status = update.status.clone(); // Clone here
+                                        view! {
+                                            <div class="bg-gray-800 p-3 rounded-lg">
+                                                <div class="flex justify-between items-center">
+                                                    <span class="text-purple-300 font-medium">{update.company}</span>
+                                                    <span class=move || format!(
+                                                        "text-sm {}",
+                                                        if status == "completed" { "text-green-400" } else { "text-yellow-400" }
+                                                    )>
+                                                        {"Status: "} {update.status}
+                                                    </span>
+                                                </div>
+                                                <div class="mt-2 text-gray-300 text-sm">
+                                                    <div>{"New posts: "} {update.new_posts}</div>
+                                                    <div>{"Skipped posts: "} {update.skipped_posts}</div>
+                                                    {update.current_post.map(|post| view! {
+                                                        <div class="mt-1 text-teal-400 text-xs">
+                                                            {"Currently processing: "} {post}
+                                                        </div>
+                                                    })}
+                                                </div>
                                             </div>
-                                            <div class="mt-2 text-gray-300 text-sm">
-                                                <div>{"New posts: "} {p.new_posts}</div>
-                                                <div>{"Skipped posts: "} {p.skipped_posts}</div>
-                                            </div>
-                                        </div>
+                                        }
                                     }).collect_view()}
                                 </div>
                             </div>

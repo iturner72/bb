@@ -16,6 +16,9 @@ pub mod server {
         Client,
     };
 
+    use futures::channel::mpsc::Sender;
+    use crate::server_fn::RssProgressUpdate;
+
     #[derive(Debug, Serialize, Deserialize)]
     pub struct FeedResult {
         pub company: String,
@@ -45,6 +48,85 @@ pub mod server {
         summary: Option<String>,
         full_text: Option<String>,
         buzzwords: Option<Vec<String>>,
+    }
+
+    pub async fn process_feeds_with_progress(
+        progress_sender: std::sync::Arc<std::sync::Mutex<Sender<RssProgressUpdate>>>
+    ) -> Result<(), Box<dyn Error>> {
+        let supabase = crate::supabase::get_client();
+        let openai = Client::with_config(OpenAIConfig::default());
+        
+        let response = supabase
+            .from("links")
+            .select("company,link")
+            .execute()
+            .await?;
+        
+        let feed_links: Vec<FeedLink> = serde_json::from_str(&response.text().await?)?;
+        
+        for link_info in feed_links {
+            let mut company_progress = RssProgressUpdate {
+                company: link_info.company.clone(),
+                status: "processing".to_string(),
+                new_posts: 0,
+                skipped_posts: 0,
+                current_post: None,
+            };
+            
+            // Send initial company status
+            progress_sender.lock().unwrap().try_send(company_progress.clone())?;
+            
+            // Process feed entries
+            let response = reqwest::get(&link_info.link).await?;
+            let content = response.bytes().await?;
+            let feed = parser::parse(&content[..])?;
+
+            for entry in feed.entries {
+                let title = entry.title
+                    .as_ref()
+                    .map(|t| t.content.clone())
+                    .unwrap_or_else(|| "Untitled".to_string());
+
+                company_progress.current_post = Some(title.clone());
+                progress_sender.lock().unwrap().try_send(company_progress.clone())?;
+                
+                let entry_link = entry.links
+                    .first()
+                    .map(|l| l.href.clone())
+                    .unwrap_or_else(String::new);
+                
+                let existing = supabase
+                    .from("poasts")
+                    .select("*")
+                    .eq("link", &entry_link)
+                    .execute()
+                    .await?;
+                
+                let existing_json: Value = serde_json::from_str(&existing.text().await?)?;
+                if !existing_json.as_array().unwrap_or(&Vec::new()).is_empty() {
+                    log::info!("Skipping existing post: {} from {}", title, link_info.company);
+                    company_progress.skipped_posts += 1;
+                    progress_sender.lock().unwrap().try_send(company_progress.clone())?;
+                    continue;
+                }
+
+                // Process new post...
+                log::info!("Processing new post: {} from {}", title, link_info.company);
+                let full_text = scrape_page(&entry_link).await?;
+                let insights = get_post_insights(&openai, &title, &full_text).await?;
+                
+                // Insert post...
+                company_progress.new_posts += 1;
+                progress_sender.lock().unwrap().try_send(company_progress.clone())?;
+            }
+            
+            // Send final company status
+            company_progress.status = "completed".to_string();
+            company_progress.current_post = None;
+            progress_sender.lock().unwrap().try_send(company_progress)?;
+        }
+        
+        Ok(())
     }
 
     pub async fn process_feeds() -> Result<Vec<FeedResult>, Box<dyn Error>> {
