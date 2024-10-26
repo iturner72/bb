@@ -70,7 +70,7 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
         .from("poasts")
         .select("id, published_at, company, title, link, summary, links!posts_company_fkey(logo_url)")
         .order("published_at.desc")
-        .limit(5);
+        .limit(10);
 
     let response = request
         .execute()

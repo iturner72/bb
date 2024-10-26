@@ -1,18 +1,32 @@
 use leptos::*;
+use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "ssr")]
-use crate::rss_service::server::process_feeds;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RssFetchProgress {
+    pub company: String,
+    pub status: String,
+    pub new_posts: i32,
+    pub skipped_posts: i32,
+}
 
 #[server(TriggerRssFetch, "/api")]
-pub async fn trigger_rss_fetch() -> Result<String, ServerFnError> {
+pub async fn trigger_rss_fetch() -> Result<Vec<RssFetchProgress>, ServerFnError> {
     #[cfg(feature = "ssr")]
     {
         log::info!("Starting manual RSS feed fetch...");
         
-        match process_feeds().await {
-            Ok(_) => {
-                log::info!("RSS feed fetch completed successfully");
-                Ok("RSS feeds processed successfully".to_string())
+        match crate::rss_service::server::process_feeds().await {
+            Ok(feed_results) => {
+                let progress = feed_results.into_iter()
+                    .map(|result| RssFetchProgress {
+                        company: result.company,
+                        status: "completed".to_string(),
+                        new_posts: result.new_posts,
+                        skipped_posts: result.skipped_posts,
+                    })
+                    .collect();
+                Ok(progress)
             },
             Err(e) => {
                 log::error!("Error processing RSS feeds: {}", e);

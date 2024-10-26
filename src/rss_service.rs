@@ -17,6 +17,13 @@ pub mod server {
     };
 
     #[derive(Debug, Serialize, Deserialize)]
+    pub struct FeedResult {
+        pub company: String,
+        pub new_posts: i32,
+        pub skipped_posts: i32,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
     pub struct FeedLink {
         company: String,
         link: String,
@@ -40,9 +47,10 @@ pub mod server {
         buzzwords: Option<Vec<String>>,
     }
 
-    pub async fn process_feeds() -> Result<(), Box<dyn Error>> {
+    pub async fn process_feeds() -> Result<Vec<FeedResult>, Box<dyn Error>> {
         let supabase = crate::supabase::get_client();
         let openai = Client::with_config(OpenAIConfig::default());
+        let mut results = Vec::new();
         
         let response = supabase
             .from("links")
@@ -51,18 +59,36 @@ pub mod server {
             .await?;
         
         let feed_links: Vec<FeedLink> = serde_json::from_str(&response.text().await?)?;
-        
+
         for link_info in feed_links {
-            process_single_feed(supabase, &openai, &link_info).await?;
+            let mut result = FeedResult {
+                company: link_info.company.clone(),
+                new_posts: 0,
+                skipped_posts: 0,
+            };
+            
+            match process_single_feed(supabase, &openai, &link_info, &mut result).await {
+                Ok(_) => {
+                    log::info!(
+                        "Processed feed for {}: {} new posts, {} skipped",
+                        result.company,
+                        result.new_posts,
+                        result.skipped_posts
+                    );
+                    results.push(result);
+                },
+                Err(e) => log::error!("Error processing feed {}: {}", link_info.company, e),
+            }
         }
         
-        Ok(())
+        Ok(results)
     }
 
     async fn process_single_feed(
         supabase: &postgrest::Postgrest,
         openai: &Client<OpenAIConfig>,
         link_info: &FeedLink,
+        result: &mut FeedResult,
     ) -> Result<(), Box<dyn Error>> {
         let response = reqwest::get(&link_info.link).await?;
         let content = response.bytes().await?;
@@ -83,43 +109,44 @@ pub mod server {
             
             let existing_json: Value = serde_json::from_str(&existing.text().await?)?;
             if !existing_json.as_array().unwrap_or(&Vec::new()).is_empty() {
-                let title = entry.title
-                    .as_ref()
-                    .map(|t| t.content.as_str())
-                    .unwrap_or("Untitled");
-                
-                log::info!("Skipping existing post: {} from {}", title, link_info.company);
+                result.skipped_posts += 1;
                 continue;
             }
 
-            let post = extract_post_data(&entry, &link_info.company)?;
-            let full_text = scrape_page(&post.link).await?;
-            let insights = get_post_insights(openai, &post.title, &full_text).await?;
+            let title = entry.title
+                .as_ref()
+                .map(|t| t.content.clone())
+                .unwrap_or_else(|| "Untitled".to_string());
+
+            let full_text = scrape_page(&entry_link).await?;
+            let insights = get_post_insights(openai, &title, &full_text).await?;
             
-            let final_post = BlogPost {
-                published_at: post.published_at,
-                company: post.company,
-                title: post.title,
-                link: post.link,
-                description: post.description,
+            let post = BlogPost {
+                published_at: entry.published
+                    .map(|d| d.format("%Y-%m-%d").to_string())
+                    .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%d").to_string()),
+                company: link_info.company.clone(),
+                title: entry.title.map(|t| t.content).unwrap_or_default(),
+                link: entry_link,
+                description: entry.summary.map(|s| s.content),
                 summary: Some(insights.summary),
                 full_text: Some(full_text),
                 buzzwords: Some(insights.buzzwords),
             };
 
-            let post_json = serde_json::to_string(&final_post)?;
-
+            let post_json = serde_json::to_string(&post)?;
             supabase
                 .from("poasts")
                 .insert(post_json)
                 .execute()
                 .await?;
-            
-            log::info!("Inserted post: {} from {}", final_post.title, final_post.company);
+
+            result.new_posts += 1;
         }
 
         Ok(())
     }
+
 
     async fn scrape_page(url: &str) -> Result<String, Box<dyn Error>> {
         let response = reqwest::get(url).await?.text().await?;
