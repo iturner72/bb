@@ -7,10 +7,8 @@ use std::collections::HashMap;
 pub fn RssTest() -> impl IntoView {
     let trigger_action = create_server_action::<TriggerRssFetchStream>();
     
-    // Store the latest state for each company
     let (company_states, set_company_states) = create_signal::<HashMap<String, RssProgressUpdate>>(HashMap::new());
     
-    // Track completed companies
     let completed_companies = create_memo(move |_| {
         company_states.get()
             .iter()
@@ -19,7 +17,6 @@ pub fn RssTest() -> impl IntoView {
             .collect::<Vec<_>>()
     });
 
-    // Create an effect to update company states as updates come in
     create_effect(move |_| {
         if let Some(Ok(updates)) = trigger_action.value().get() {
             let mut new_states = HashMap::new();
@@ -30,24 +27,22 @@ pub fn RssTest() -> impl IntoView {
         }
     });
 
-    // Helper function to determine card classes based on status
     let get_card_classes = move |update: &RssProgressUpdate| {
-        let base_classes = "transition-all duration-300 transform bg-gray-800 p-3 rounded-lg";
+        let base_classes = "transition-all duration-300 transform bg-gray-200 dark:bg-teal-900 p-3 rounded-lg";
         let status_classes = match update.status.as_str() {
-            "completed" => "border-l-4 border-green-500 translate-x-1",
-            "processing" => "border-l-4 border-yellow-500",
-            _ => "border-l-4 border-gray-500 opacity-50"
+            "completed" => "border-l-4 border-seafoam-500 dark:border-mint-800 translate-x-1",
+            "processing" => "border-l-4 border-aqua-500 dark:border-seafoam-400",
+            _ => "border-l-4 border-gray-400 dark:border-gray-800 opacity-50"
         };
         format!("{} {}", base_classes, status_classes)
     };
 
-    // Helper function to get status badge classes
     let get_status_badge_classes = move |status: &str| {
         let base_classes = "text-sm px-2 py-1 rounded";
         let status_classes = if status == "completed" {
-            "bg-green-900/30 text-green-400"
+            "bg-seafoam-200 dark:bg-mint-900/30 text-seafoam-900 dark:text-mint-700"
         } else {
-            "bg-yellow-900/30 text-yellow-400"
+            "bg-aqua-200 dark:bg-seafoam-900/30 text-aqua-900 dark:text-seafoam-300"
         };
         format!("{} {}", base_classes, status_classes)
     };
@@ -57,7 +52,11 @@ pub fn RssTest() -> impl IntoView {
             <ActionForm action=trigger_action>
                 <button
                     type="submit"
-                    class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 transition-colors"
+                    class="px-4 py-2 bg-seafoam-500 dark:bg-aqua-600 text-white dark:text-teal-100 rounded 
+                           hover:bg-seafoam-400 dark:hover:bg-aqua-500 
+                           disabled:bg-gray-300 dark:disabled:bg-gray-800 
+                           disabled:text-gray-500 dark:disabled:text-gray-600 
+                           transition-colors"
                     disabled=move || trigger_action.pending().get()
                 >
                     {move || if trigger_action.pending().get() {
@@ -79,16 +78,16 @@ pub fn RssTest() -> impl IntoView {
                 let states = company_states.get();
                 if states.is_empty() {
                     view! {
-                        <div class="mt-4 p-4 text-center animate-pulse text-gray-400">
+                        <div class="mt-4 p-4 text-center animate-pulse text-gray-500 dark:text-gray-600">
                             "Waiting to start processing..."
                         </div>
                     }
                 } else {
                     view! {
                         <div class="mt-4 space-y-2">
-                            <h3 class="text-lg font-semibold text-gray-200 mb-4">
+                            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-400 mb-4">
                                 "Feed Processing Results "
-                                <span class="text-sm text-gray-400">
+                                <span class="text-sm text-gray-500 dark:text-gray-600">
                                     {format!("({} completed)", completed_companies.get().len())}
                                 </span>
                             </h3>
@@ -103,26 +102,28 @@ pub fn RssTest() -> impl IntoView {
                                     view! {
                                         <div class={get_card_classes(update)}>
                                             <div class="flex justify-between items-center">
-                                                <span class="text-purple-300 font-medium">
+                                                <span class="text-seafoam-800 dark:text-mint-600 font-medium">
                                                     {company}
                                                 </span>
                                                 <span class={get_status_badge_classes(&status)}>
                                                     {status}
                                                 </span>
                                             </div>
-                                            <div class="mt-2 text-gray-300 text-sm grid gap-1">
+                                            <div class="mt-2 text-gray-700 dark:text-gray-500 text-sm grid gap-1">
                                                 <div class="flex justify-between">
                                                     <span>"New posts"</span>
-                                                    <span class="text-teal-400">{new_posts}</span>
+                                                    <span class="text-aqua-600 dark:text-aqua-300">{new_posts}</span>
                                                 </div>
                                                 <div class="flex justify-between">
                                                     <span>"Skipped posts"</span>
-                                                    <span class="text-gray-500">{skipped_posts}</span>
+                                                    <span class="text-gray-500 dark:text-gray-600">{skipped_posts}</span>
                                                 </div>
                                                 {current_post.map(|post| view! {
                                                     <div class="mt-1 text-sm">
-                                                        <span class="text-gray-500">"Processing: "</span>
-                                                        <span class="text-teal-400 truncate block">{post}</span>
+                                                        <span class="text-gray-500 dark:text-gray-600">"Processing: "</span>
+                                                        <span class="text-seafoam-600 dark:text-seafoam-300 truncate block">
+                                                            {post}
+                                                        </span>
                                                     </div>
                                                 })}
                                             </div>
