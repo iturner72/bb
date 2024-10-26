@@ -2,7 +2,7 @@
 use leptos::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RssProgressUpdate {
     pub company: String,
     pub status: String,
