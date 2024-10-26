@@ -3,6 +3,8 @@ pub mod error_template;
 pub mod state;
 pub mod supabase;
 pub mod components;
+pub mod rss_service;
+pub mod server_fn;
 #[cfg(feature = "ssr")]
 pub mod fileserv;
 

@@ -4,6 +4,7 @@ use leptos_meta::*;
 use leptos_router::*;
 use crate::components::poasts::Poasts;
 use crate::components::dark_mode_toggle::DarkModeToggle;
+use crate::components::rss_test::RssTest;
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -56,6 +57,7 @@ fn HomePage() -> impl IntoView {
                     <DarkModeToggle />
                 </div>
             </div>
+            <RssTest/>
             <Poasts/>
         </div>
     }
