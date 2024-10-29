@@ -5,24 +5,17 @@ use leptos_router::*;
 use crate::components::poasts::Poasts;
 use crate::components::dark_mode_toggle::DarkModeToggle;
 use crate::components::rss_test::RssTest;
-use crate::auth::{AdminLogin, ProtectedRoute};
+use crate::auth::auth_components::{AdminLogin, ProtectedRoute};
 
 #[component]
 pub fn App() -> impl IntoView {
-    // Provides context that manages stylesheets, titles, meta tags, etc.
     provide_meta_context();
 
     view! {
-
-
-        // injects a stylesheet into the document <head>
-        // id=leptos means cargo-leptos will hot-reload this stylesheet
         <Stylesheet id="leptos" href="/pkg/bb.css"/>
-
-        // sets the document title
+        
         <Title text="Welcome to Leptos"/>
-
-        // content for this welcome page
+        
         <Router fallback=|| {
             let mut outside_errors = Errors::default();
             outside_errors.insert_with_default_key(AppError::NotFound);
@@ -47,7 +40,9 @@ fn HomePage() -> impl IntoView {
     view! {
         <div class="w-full mx-auto pl-2 bg-gray-100 dark:bg-teal-900">
             <div class="flex justify-between items-center">
-                <h1 class="text-3xl text-left text-seafoam-600 dark:text-mint-400 ib pl-4 p-4 font-bold">"bryptoblogs"</h1>
+                <h1 class="text-3xl text-left text-seafoam-600 dark:text-mint-400 ib pl-4 p-4 font-bold">
+                    "bryptoblogs"
+                </h1>
                 <div class="items-end pr-4">
                     <a 
                         href="https://github.com/iturner72/bb" 
