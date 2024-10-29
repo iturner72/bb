@@ -34,7 +34,7 @@ RUN apt-get update -y \
 
 # -- NB: update binary name from "leptos_start" to match your app name in Cargo.toml --
 # Copy the server binary to the /app directory
-COPY --from=builder /app/target/release/bb /app/
+COPY --from=builder /app/target/release/bb /app/bb
 
 # /target/site contains our JS/WASM/CSS, etc.
 COPY --from=builder /app/target/site /app/site
@@ -42,10 +42,15 @@ COPY --from=builder /app/target/site /app/site
 # Copy Cargo.toml if it’s needed at runtime
 COPY --from=builder /app/Cargo.toml /app/
 
+RUN chmod +x /app/bb
+
 # Set any required env variables and
 ENV RUST_LOG="info"
 ENV LEPTOS_SITE_ADDR="0.0.0.0:8080"
 ENV LEPTOS_SITE_ROOT="site"
+ENV LEPTOS_OUTPUT_NAME="bb"
+ENV LEPTOS_ENV="PROD"
+
 EXPOSE 8080
 
 # -- NB: update binary name from "leptos_start" to match your app name in Cargo.toml --
