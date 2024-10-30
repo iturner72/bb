@@ -22,6 +22,7 @@ WORKDIR /app
 COPY . .
 
 # Build the app
+ENV LEPTOS_ENV="PROD"
 RUN cargo leptos build --release -vv
 
 FROM debian:bookworm-slim as runtime
@@ -45,11 +46,11 @@ COPY --from=builder /app/Cargo.toml /app/
 RUN chmod +x /app/bb
 
 # Set any required env variables and
-ENV RUST_LOG="info"
-ENV LEPTOS_SITE_ADDR="0.0.0.0:8080"
-ENV LEPTOS_SITE_ROOT="site"
-ENV LEPTOS_OUTPUT_NAME="bb"
-ENV LEPTOS_ENV="PROD"
+ENV RUST_LOG="info" \
+    LEPTOS_SITE_ADDR="0.0.0.0:8080" \
+    LEPTOS_SITE_ROOT="site" \
+    LEPTOS_OUTPUT_NAME="bb" \
+    LEPTOS_ENV="PROD"
 
 EXPOSE 8080
 
