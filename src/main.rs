@@ -28,9 +28,15 @@ cfg_if! {
             let addr = leptos_options.site_addr;
             let routes = generate_route_list(App);
 
+            let _ = std::env::var("JWT_SECRET")
+                .expect("JWT_SECRET must be set");
+            let _ = std::env::var("ADMIN_USERNAME")
+                .expect("ADMIN_USERNAME must be set");
+            let _ = std::env::var("ADMIN_PASSWORD")
+                .expect("ADMIN_PASSWORD must be set");
+
             let app_state = AppState {
                 leptos_options: leptos_options.clone(),
-                // Add other state as needed
             };
 
             async fn server_fn_handler(
@@ -63,6 +69,8 @@ cfg_if! {
                 }))
                 .fallback(file_and_error_handler)
                 .with_state(app_state);
+
+            log::info!("Starting server at {}", addr);
 
             let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
             logging::log!("listening on http://{}", &addr);

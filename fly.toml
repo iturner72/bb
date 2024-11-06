@@ -10,20 +10,22 @@ primary_region = 'lax'
 dockerfile = "Dockerfile"
 
 [env]
-  RUST_LOG="info"
-  LEPTOS_SITE_ADDR="0.0.0.0:8080"
-  LEPTOS_SITE_ROOT="site"
-  LEPTOS_OUTPUT_NAME="bb"
+LEPTOS_OUTPUT_NAME="bb"
+LEPTOS_SITE_ROOT="site"
+LEPTOS_SITE_PKG_DIR = "pkg"
+LEPTOS_SITE_ADDR="0.0.0.0:8080"
+PORT = "8080"
+RUST_LOG="info"
 
 [http_service]
-  internal_port = 8080
-  force_https = true
-  auto_stop_machines = true
-  auto_start_machines = true
-  min_machines_running = 1
-  processes = ['app']
+internal_port = 8080
+force_https = true
+auto_stop_machines = true
+auto_start_machines = true
+min_machines_running = 1
+processes = ['app']
 
 [[vm]]
-  memory = '1gb'
-  cpu_kind = 'shared'
-  cpus = 1
+memory = '1gb'
+cpu_kind = 'shared'
+cpus = 1
