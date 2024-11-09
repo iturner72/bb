@@ -25,13 +25,15 @@ COPY . .
 ENV LEPTOS_ENV="PROD"
 RUN cargo leptos build --release -vv
 
-FROM debian:bookworm-slim as runtime
-WORKDIR /app
+FROM debian:bullseye-slim as runtime
+
 RUN apt-get update -y \
-  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && apt-get install -y --no-install-recommends openssl ca-certificates libssl1.1 pkg-config \
   && apt-get autoremove -y \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
 
 # -- NB: update binary name from "leptos_start" to match your app name in Cargo.toml --
 # Copy the server binary to the /app directory
