@@ -114,18 +114,32 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
 #[component]
 pub fn Poasts() -> impl IntoView {
     let poasts = create_resource(|| (), |_| get_poasts());
-    let (search_query, set_search_query) = create_signal(String::new());
+    let (selected_company, set_selected_company) = create_signal(String::new());
     let (filtered_poasts, set_filtered_poasts) = create_signal(vec![]);
 
+    let get_unique_companies = move |posts: &[Poast]| -> Vec<String> {
+        let mut companies: Vec<String> = posts
+            .iter()
+            .map(|p| p.company.clone())
+            .collect();
+        companies.sort();
+        companies.dedup();
+        companies
+    };
+
     create_effect(move |_| {
-        let query = search_query().to_lowercase();
+        let company = selected_company().to_string();
         poasts.with(|poasts_result| {
             match poasts_result {
                 Some(Ok(poasts)) => {
-                    let filtered = poasts.iter()
-                        .filter(|poast| poast.company.to_lowercase().contains(&query))
-                        .cloned()
-                        .collect::<Vec<_>>();
+                    let filtered = if company.is_empty() {
+                        poasts.clone()
+                    } else {
+                        poasts.iter()
+                            .filter(|poast| poast.company == company)
+                            .cloned()
+                            .collect()
+                    };
                     set_filtered_poasts(filtered);
                 },
                 _ => set_filtered_poasts(vec![]),
@@ -134,15 +148,42 @@ pub fn Poasts() -> impl IntoView {
     });
 
     view! {
-        <div class="space-y-4">
-            <div class="flex justify-start mb-4 pl-4">
-                <input
-                    type="text"
-                    placeholder="Filter by company..."
-                    on:input=move |ev| set_search_query(event_target_value(&ev))
-                    class="w-1/6 p-2 rounded-md bg-gray-100 dark:bg-teal-800 text-gray-800 dark:text-gray-200 border border-teal-500 dark:border-seafoam-500 focus:border-seafoam-600 dark:focus:border-aqua-400 focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400 placeholder-gray-500 dark:placeholder-gray-400"
-                />
-            </div>
+        <div class="pt-4 space-y-4">
+            <Suspense fallback=|| view! { <div class="pl-4 h-10"></div> }>
+                <div class="flex justify-start mb-2 pl-4">
+                    {move || {
+                        poasts.get().map(|posts_result| {
+                            match posts_result {
+                                Ok(posts) => {
+                                    let companies = get_unique_companies(&posts);
+                                    view! {
+                                        <>
+                                            <select
+                                                on:change=move |ev| set_selected_company(event_target_value(&ev))
+                                                class="w-52 p-2 rounded-md bg-gray-100 dark:bg-teal-800 text-gray-800 dark:text-gray-200 
+                                                       border border-teal-500 dark:border-seafoam-500 
+                                                       focus:border-seafoam-600 dark:focus:border-aqua-400 
+                                                       focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400"
+                                            >
+                                                <option value="">"All Companies"</option>
+                                                {companies.into_iter()
+                                                    .map(|company| {
+                                                        view! {
+                                                            <option value={company.clone()}>{company}</option>
+                                                        }
+                                                    })
+                                                    .collect_view()
+                                                }
+                                            </select>
+                                        </>
+                                    }
+                                }
+                                Err(_) => view! { <><div></div></> }
+                            }
+                        })
+                    }}
+                </div>
+            </Suspense>
             <Suspense fallback=|| view! { <p class="text-center text-teal-600 dark:text-aqua-400">"Loading..."</p> }>
                 {move || {
                     let poasts = filtered_poasts();
