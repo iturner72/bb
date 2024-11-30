@@ -28,7 +28,7 @@ pub fn RssTest() -> impl IntoView {
     });
 
     let get_card_classes = move |update: &RssProgressUpdate| {
-        let base_classes = "transition-all duration-300 transform bg-gray-200 dark:bg-teal-900 p-3 rounded-lg";
+        let base_classes = "transition-all transform bg-gray-200 dark:bg-teal-900 p-3 rounded-lg";
         let status_classes = match update.status.as_str() {
             "completed" => "border-l-4 border-seafoam-500 dark:border-mint-800 translate-x-1",
             "processing" => "border-l-4 border-aqua-500 dark:border-seafoam-400",

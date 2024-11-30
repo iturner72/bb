@@ -11,7 +11,7 @@ pub fn Navbar() -> impl IntoView {
                 <A href="/rss" class="pr-2 text-seafoam-600 dark:text-aqua-400 hover:text-seafoam-800 dark:hover:text-aqua-300">"rss"</A>
                 <A 
                     href="https://github.com/iturner72/bb" 
-                    class="text-teal-600 dark:text-aqua-400 pr-2 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors duration-200"
+                    class="text-teal-600 dark:text-aqua-400 pr-2 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors"
                     target="_blank"
                 >
                     "github"

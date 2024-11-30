@@ -216,7 +216,7 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
                 target="_blank"
                 rel="noopener noreferrer"
             >
-                <article class="base-poast flex flex-col items-start cursor-pointer h-full w-full bg-white dark:bg-teal-800 border-2 border-gray-200 dark:border-teal-700 hover:border-seafoam-500 dark:hover:border-aqua-500 p-4 rounded-lg shadow-md hover:shadow-lg transition-all duration-300">
+                <article class="base-poast flex flex-col items-start cursor-pointer h-full w-full bg-white dark:bg-teal-800 border-2 border-gray-200 dark:border-teal-700 hover:border-seafoam-500 dark:hover:border-aqua-500 p-4 rounded-lg shadow-md hover:shadow-lg transition-all">
                     <div class="flex items-center pb-2 max-w-1/2">
                         {poast.links.clone().and_then(|links| links.logo_url).map(|url| view! {
                             <img src={url} alt={format!("{} logo", poast.company)} class="w-8 h-8 mr-2 rounded-sm" />
