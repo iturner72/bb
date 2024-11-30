@@ -189,7 +189,7 @@ pub mod server {
                 user_message.into(),
             ],
             response_format: Some(ResponseFormat::JsonObject),
-            max_tokens: Some(100),
+            max_tokens: Some(200),
             ..Default::default()
         };
 
