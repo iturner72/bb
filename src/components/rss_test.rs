@@ -88,11 +88,11 @@ pub fn RssTest() -> impl IntoView {
                                             </span>
                                         </div>
                                         <div class="mt-2 text-sm grid gap-1">
-                                            <div class="flex justify-between">
+                                            <div class="text-seafoam-800 dark:text-mint-600 flex justify-between">
                                                 <span>"New posts"</span>
                                                 <span>{update.new_posts}</span>
                                             </div>
-                                            <div class="flex justify-between">
+                                            <div class="text-seafoam-800 dark:text-mint-600 flex justify-between">
                                                 <span>"Skipped posts"</span>
                                                 <span>{update.skipped_posts}</span>
                                             </div>
