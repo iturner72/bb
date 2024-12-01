@@ -1,10 +1,8 @@
 # Get started with a build env with Rust nightly
 FROM rustlang/rust:nightly-bullseye as builder
 
-# update to latest nightly
-RUN rustup update nightly
-RUN rustup default nightly
-RUN rustup target add wasm32-unknown-unknown
+# If you’re using stable, use this instead
+# FROM rust:1.74-bullseye as builder
 
 # Install cargo-binstall, which makes it easier to install other
 # cargo extensions like cargo-leptos
@@ -14,6 +12,9 @@ RUN cp cargo-binstall /usr/local/cargo/bin
 
 # Install cargo-leptos
 RUN cargo binstall cargo-leptos -y
+
+# Add the WASM target
+RUN rustup target add wasm32-unknown-unknown
 
 # Make an /app dir, which everything will eventually live in
 RUN mkdir -p /app
