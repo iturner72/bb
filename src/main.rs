@@ -4,19 +4,73 @@ cfg_if! {
     if #[cfg(feature = "ssr")] {
         use axum::{
             body::Body as AxumBody,
-            extract::State,
+            extract::{Query, State},
             http::Request,
             response::IntoResponse,
+            response::sse::{Event, Sse},
             routing::get,
             Router,
         };
+        use futures::stream::{Stream, StreamExt};
+        use futures::channel::mpsc as futures_mpsc;
+        use tokio::sync::mpsc as tokio_mpsc;
+        use std::convert::Infallible;
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+        use tokio::sync::mpsc;
+        use std::collections::HashMap;
         use dotenv::dotenv;
         use env_logger::Env;
         use leptos::*;
         use leptos_axum::{generate_route_list, handle_server_fns_with_context, LeptosRoutes};
         use bb::app::*;
         use bb::fileserv::file_and_error_handler;
+        use bb::rss_service::server::process_feeds_with_progress;
+        use bb::server_fn::RssProgressUpdate;
         use bb::state::AppState;
+
+        pub struct SseStream {
+            pub receiver: mpsc::Receiver<Result<Event, Infallible>>,
+        }
+
+        impl Stream for SseStream {
+            type Item = Result<Event, Infallible>;
+
+            fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+                self.receiver.poll_recv(cx)
+            }
+        }
+
+        async fn bridge_channels(
+            mut futures_rx: futures_mpsc::Receiver<RssProgressUpdate>,
+            tokio_tx: tokio_mpsc::Sender<Result<Event, Infallible>>,
+        ) {
+            while let Some(update) = futures_rx.next().await {
+                let json = serde_json::to_string(&update).unwrap_or_default();
+                if tokio_tx.send(Ok(Event::default().data(json))).await.is_err() {
+                    break;
+                }
+            }
+        }
+
+        async fn rss_progress_handler(
+            Query(_params): Query<HashMap<String, String>>,
+        ) -> Sse<SseStream> {
+            let (tokio_tx, tokio_rx) = tokio_mpsc::channel(100);
+            let (futures_tx, futures_rx) = futures_mpsc::channel(100);
+
+            tokio::spawn(async move {
+                if let Err(e) = process_feeds_with_progress(
+                    std::sync::Arc::new(std::sync::Mutex::new(futures_tx))
+                ).await {
+                    log::error!("Error processing feeds: {}", e);
+                }
+            });
+
+            tokio::spawn(bridge_channels(futures_rx, tokio_tx));
+
+            Sse::new(SseStream { receiver: tokio_rx })
+        }
 
         #[tokio::main]
         async fn main() {
@@ -57,6 +111,7 @@ cfg_if! {
                     "/api/*fn_name",
                     get(server_fn_handler).post(server_fn_handler),
                 )
+                .route("/api/rss-progress", get(rss_progress_handler))
                 .leptos_routes_with_handler(routes, get(|State(app_state): State<AppState>, request: Request<AxumBody>| async move {
                     let handler = leptos_axum::render_app_async_with_context(
                         app_state.leptos_options.clone(),
