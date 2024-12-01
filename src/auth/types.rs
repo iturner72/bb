@@ -27,6 +27,6 @@ impl fmt::Display for AuthError {
     }
 }
 
-pub(crate) fn to_server_error(e: AuthError) -> ServerFnError {
+pub fn to_server_error(e: AuthError) -> ServerFnError {
     ServerFnError::ServerError(e.to_string())
 }
