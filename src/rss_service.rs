@@ -4,6 +4,8 @@ pub mod server {
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
     use std::error::Error;
+    use std::convert::Infallible;
+    use axum::response::sse::Event;
     use async_openai::{
         config::OpenAIConfig,
         types::{
@@ -15,7 +17,6 @@ pub mod server {
         Client,
     };
 
-    use futures::channel::mpsc::Sender;
     use crate::server_fn::RssProgressUpdate;
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -50,7 +51,7 @@ pub mod server {
     }
 
     pub async fn process_feeds_with_progress(
-        progress_sender: std::sync::Arc<std::sync::Mutex<Sender<RssProgressUpdate>>>
+        progress_sender: tokio::sync::mpsc::Sender<Result<Event, Infallible>>
     ) -> Result<(), Box<dyn Error>> {
         let supabase = crate::supabase::get_client();
         let openai = Client::with_config(OpenAIConfig::default());
@@ -73,7 +74,9 @@ pub mod server {
             };
             
             // Send initial company status
-            progress_sender.lock().unwrap().try_send(company_progress.clone())?;
+            progress_sender.send(
+                company_progress.clone().into_event()
+            ).await?;
             
             // Process feed entries
             let response = reqwest::get(&link_info.link).await?;
@@ -87,7 +90,7 @@ pub mod server {
                     .unwrap_or_else(|| "Untitled".to_string());
 
                 company_progress.current_post = Some(title.clone());
-                progress_sender.lock().unwrap().try_send(company_progress.clone())?;
+                progress_sender.send(company_progress.clone().into_event()).await?;
                 
                 let entry_link = entry.links
                     .first()
@@ -105,7 +108,7 @@ pub mod server {
                 if !existing_json.as_array().unwrap_or(&Vec::new()).is_empty() {
                     log::info!("Skipping existing post: {} from {}", title, link_info.company);
                     company_progress.skipped_posts += 1;
-                    progress_sender.lock().unwrap().try_send(company_progress.clone())?;
+                    progress_sender.send(company_progress.clone().into_event()).await?;
                     continue;
                 }
 
@@ -136,13 +139,13 @@ pub mod server {
                     .await?;
 
                 company_progress.new_posts += 1;
-                progress_sender.lock().unwrap().try_send(company_progress.clone())?;
+                progress_sender.send(company_progress.clone().into_event()).await?;
             }
             
             // Send final company status
             company_progress.status = "completed".to_string();
             company_progress.current_post = None;
-            progress_sender.lock().unwrap().try_send(company_progress)?;
+            progress_sender.send(company_progress.into_event()).await?;
         }
         
         Ok(())
