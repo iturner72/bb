@@ -198,6 +198,11 @@ pub mod server {
             progress_sender.send(company_progress.into_event()).await?;
         }
         
+        progress_sender
+            .send(Ok(Event::default().data("[DONE]")))
+            .await?;
+
+        log::info!("RSS processing completed, sent [DONE] message");
         Ok(())
     }
 
