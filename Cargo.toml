@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 async-openai = { version = "0.25", optional = true }
 axum = { version = "0.7", optional = true, features = ["macros"] }
 console_error_panic_hook = "0.1"
-chrono = "0.4.38"
+chrono = { version = "0.4.38", features = ["serde"] }
 cfg-if = "1.0.0"
 dotenv = { version = "0.15.0", optional = false }
 env_logger = { version = "0.9", optional = false }

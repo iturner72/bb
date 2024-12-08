@@ -6,6 +6,8 @@ pub mod server {
     use std::error::Error;
     use std::convert::Infallible;
     use axum::response::sse::Event;
+    use chrono::{DateTime, Utc, Duration};
+    use serde_json::json;
     use async_openai::{
         config::OpenAIConfig,
         types::{
@@ -19,6 +21,10 @@ pub mod server {
 
     use crate::server_fn::RssProgressUpdate;
 
+    const STANDARD_ENTRY_LIMIT: usize = 5;
+    const EXTENDED_ENTRY_LIMIT: usize = 20;
+    const EXTENDED_PROCESSING_THRESHOLD: Duration = Duration::days(14);
+
     #[derive(Debug, Serialize, Deserialize)]
     pub struct FeedResult {
         pub company: String,
@@ -30,6 +36,7 @@ pub mod server {
     pub struct FeedLink {
         company: String,
         link: String,
+        last_processed: Option<DateTime<Utc>>,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -58,7 +65,7 @@ pub mod server {
         
         let response = supabase
             .from("links")
-            .select("company,link")
+            .select("company,link,last_processed")
             .execute()
             .await?;
         
@@ -83,7 +90,41 @@ pub mod server {
             let content = response.bytes().await?;
             let feed = parser::parse(&content[..])?;
 
-            for entry in feed.entries {
+            // sort by date, reverse chron 
+            let mut entries = feed.entries;
+            entries.sort_by(|a, b| b.published.cmp(&a.published)); 
+
+            // determine how many entries to process based on last_processed timestamp
+            let entries_limit = match &link_info.last_processed {
+                None => {
+                    log::info!("First time processing {}, fetching all entries", link_info.company);
+                    entries.len()  // for new companies, process all entries
+                }
+                Some(last_processed) => {
+                    let time_since_last_process = Utc::now() - *last_processed;
+                    if time_since_last_process > EXTENDED_PROCESSING_THRESHOLD {
+                        log::info!(
+                            "Over 2 weeks since last processing {} ({}), fetching {} entries",
+                            link_info.company,
+                            time_since_last_process.num_days(),
+                            EXTENDED_ENTRY_LIMIT
+                        );
+                        EXTENDED_ENTRY_LIMIT
+                    } else {
+                        log::info!(
+                            "Recent processing for {} ({} days ago), fetching {} entries",
+                            link_info.company,
+                            time_since_last_process.num_days(),
+                            STANDARD_ENTRY_LIMIT
+                        );
+                        STANDARD_ENTRY_LIMIT
+                    }
+                }
+            };
+
+            entries.truncate(entries_limit);
+
+            for entry in entries {
                 let title = entry.title
                     .as_ref()
                     .map(|t| t.content.clone())
@@ -141,6 +182,15 @@ pub mod server {
                 company_progress.new_posts += 1;
                 progress_sender.send(company_progress.clone().into_event()).await?;
             }
+
+            // update last_processed timestamp
+            let now = Utc::now();
+            supabase
+                .from("links")
+                .update(serde_json::to_string(&json!({ "last_processed": now }))?)
+                .eq("company", &link_info.company)
+                .execute()
+                .await?;
             
             // Send final company status
             company_progress.status = "completed".to_string();
