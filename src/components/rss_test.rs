@@ -32,6 +32,7 @@ pub fn RssTest() -> impl IntoView {
         }) as Box<dyn FnMut(_)>);
 
         let event_source_error = event_source.clone();
+
         let on_error = Closure::wrap(Box::new(move |error: ErrorEvent| {
             log::error!("SSE Error: {:?}", error);
             event_source_error.close();
@@ -46,14 +47,27 @@ pub fn RssTest() -> impl IntoView {
     };
 
     view! {
-        <div class="p-4 space-y-4">
-            <button
-                class="px-4 py-2 bg-seafoam-500 dark:bg-aqua-600 text-white dark:text-teal-100 rounded 
-                       hover:bg-seafoam-400 dark:hover:bg-aqua-500 transition-colors"
-                on:click=move |_| start_streaming()
-            >
-                "Start RSS Fetch"
-            </button>
+        <div class="p-4 space-y-4 max-w-3xl mx-auto">
+            <div class="flex items-center justify-between">
+                <button
+                    class="px-4 py-2 bg-seafoam-500 dark:bg-aqua-600 text-white dark:text-teal-100 rounded 
+                           hover:bg-seafoam-400 dark:hover:bg-aqua-500 transition-colors"
+                    on:click=move |_| start_streaming()
+                >
+                    "Start RSS Fetch"
+                </button>
+                <div class="text-sm text-seafoam-400 dark:text-seafoam-600">
+                    {move || {
+                        let states = progress_states.get();
+                        let completed = states.values().filter(|s| s.status == "completed").count();
+                        if !states.is_empty() {
+                            format!("{}/{} completed", completed, states.len())
+                        } else {
+                            "".to_string()
+                        }
+                    }}
+                </div>
+            </div>
 
             {move || {
                 let states = progress_states.get();
@@ -73,33 +87,33 @@ pub fn RssTest() -> impl IntoView {
                                     _ => "bg-gray-200 dark:bg-teal-900 p-3 rounded-lg border-l-4 border-gray-400 dark:border-gray-800 opacity-50"
                                 };
                                 let status_class = if update.status == "completed" {
-                                    "text-sm px-2 py-1 rounded bg-seafoam-200 dark:bg-mint-900/30 text-seafoam-900 dark:text-mint-700"
+                                    "text-xs md:text-sm px-2 py-1 rounded bg-seafoam-200 dark:bg-mint-900/30 text-seafoam-900 dark:text-mint-700"
                                 } else {
-                                    "text-sm px-2 py-1 rounded bg-aqua-200 dark:bg-seafoam-900/30 text-aqua-900 dark:text-seafoam-300"
+                                    "text-xs md:text-sm px-2 py-1 rounded bg-aqua-200 dark:bg-seafoam-900/30 text-aqua-900 dark:text-seafoam-300"
                                 };
                                 view! {
                                     <div class={class}>
-                                        <div class="flex justify-between items-center">
-                                            <span class="text-seafoam-800 dark:text-mint-600 font-medium">
+                                        <div class="flex justify-between items-center gap-2">
+                                            <span class="text-seafoam-800 dark:text-mint-600 font-medium textsm md:text-base truncate">
                                                 {update.company.clone()}
                                             </span>
-                                            <span class={status_class}>
+                                            <span class={format!("{} whitespace-nowrap", status_class)}>
                                                 {update.status.clone()}
                                             </span>
                                         </div>
-                                        <div class="mt-2 text-sm grid gap-1">
-                                            <div class="text-seafoam-800 dark:text-mint-600 flex justify-between">
+                                        <div class="mt-2 text-xs md:text-sm grid gap-1">
+                                            <div class="grid grid-cols-2 text-seafoam-800 dark:text-mint-600">
                                                 <span>"New posts"</span>
-                                                <span>{update.new_posts}</span>
+                                                <span class="text-right">{update.new_posts}</span>
                                             </div>
-                                            <div class="text-seafoam-800 dark:text-mint-600 flex justify-between">
+                                            <div class="grid grid-cols-2 text-seafoam-800 dark:text-mint-600">
                                                 <span>"Skipped posts"</span>
-                                                <span>{update.skipped_posts}</span>
+                                                <span class="text-right">{update.skipped_posts}</span>
                                             </div>
                                             {update.current_post.as_ref().map(|post| view! {
-                                                <div class="mt-1">
-                                                    <span class="text-gray-500">"Processing: "</span>
-                                                    <span class="text-seafoam-600 dark:text-seafoam-300 truncate">
+                                                <div class="mt-2 space-y-1">
+                                                    <span class="text-gray-500 text-xs">"Processing: "</span>
+                                                    <span class="text-seafoam-600 dark:text-seafoam-300 text-sm line-clamp-2">
                                                         {post}
                                                     </span>
                                                 </div>
