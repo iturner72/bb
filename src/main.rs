@@ -1,3 +1,4 @@
+use bb::backfill_service;
 use cfg_if::cfg_if;
 
 cfg_if! {
@@ -52,6 +53,20 @@ cfg_if! {
             Sse::new(SseStream { receiver: rx })
         }
 
+        async fn backfill_progress_handler(
+            Query(_params): Query<HashMap<String, String>>,
+        ) -> Sse<SseStream> {
+            let (tx, rx) = tokio_mpsc::channel(100);
+
+            tokio::spawn(async move {
+                if let Err(e) = backfill_service::backfill::backfill_missing_data(tx).await {
+                    log::error!("Error during backfill: {}", e);
+                }
+            });
+
+            Sse::new(SseStream { receiver: rx })
+        }
+
         #[tokio::main]
         async fn main() {
             dotenv().ok();
@@ -92,6 +107,7 @@ cfg_if! {
                     get(server_fn_handler).post(server_fn_handler),
                 )
                 .route("/api/rss-progress", get(rss_progress_handler))
+                .route("/api/backfill-progress", get(backfill_progress_handler))
                 .leptos_routes_with_handler(routes, get(|State(app_state): State<AppState>, request: Request<AxumBody>| async move {
                     let handler = leptos_axum::render_app_async_with_context(
                         app_state.leptos_options.clone(),

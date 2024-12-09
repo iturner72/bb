@@ -41,8 +41,8 @@ pub mod server {
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct PostInsights {
-        summary: String,
-        buzzwords: Vec<String>,
+        pub summary: String,
+        pub buzzwords: Vec<String>,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -55,6 +55,15 @@ pub mod server {
         summary: Option<String>,
         full_text: Option<String>,
         buzzwords: Option<Vec<String>>,
+    }
+
+    #[derive(Debug, thiserror::Error)]
+    pub enum InsightError {
+        #[error("OpenAI error: {0}")]
+        OpenAI(String),
+
+        #[error("JSON error: {0}")]
+        Json(#[from] serde_json::Error),
     }
 
     pub async fn process_feeds_with_progress(
@@ -211,7 +220,7 @@ pub mod server {
         Ok(())
     }
 
-    async fn scrape_page(url: &str) -> Result<String, Box<dyn Error>> {
+    pub async fn scrape_page(url: &str) -> Result<String, Box<dyn Error>> {
         let response = reqwest::get(url).await?.text().await?;
         
         let document = scraper::Html::parse_document(&response);
@@ -224,11 +233,11 @@ pub mod server {
         Ok(text)
     }
 
-    async fn get_post_insights(
+    pub async fn get_post_insights(
         client: &Client<OpenAIConfig>,
         title: &str,
         full_text: &str,
-    ) -> Result<PostInsights, Box<dyn Error>> {
+    ) -> Result<PostInsights, InsightError> {
         let system_message = ChatCompletionRequestSystemMessage {
             content: "You are a helpful assistant.".into(),
             name: None,
@@ -256,7 +265,10 @@ pub mod server {
             ..Default::default()
         };
 
-        let response = client.chat().create(request).await?;
+        let response = client.chat().create(request)
+            .await
+            .map_err(|e| InsightError::OpenAI(e.to_string()))?;
+
         let content = response.choices[0].message.content.clone().unwrap_or_default();
         
         let insights: PostInsights = serde_json::from_str(&content)?;

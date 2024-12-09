@@ -13,7 +13,7 @@ pub fn AdminLogin() -> impl IntoView {
         if let Some(Ok(auth_response)) = login_action.value().get() {
             if let Ok(Some(storage)) = window().local_storage() {
                 let _ = storage.set_item("auth_token", &auth_response.token);
-                let _ = window().location().set_href("/rss");
+                let _ = window().location().set_href("/admin-panel");
             }
         } else if let Some(Err(e)) = login_action.value().get() {
             set_error.set(Some(e.to_string()));
