@@ -19,7 +19,7 @@ pub mod server {
         Client,
     };
 
-    use crate::server_fn::RssProgressUpdate;
+    use crate::server_fn::{invalidate_poasts_cache, RssProgressUpdate};
 
     const STANDARD_ENTRY_LIMIT: usize = 5;
     const EXTENDED_ENTRY_LIMIT: usize = 20;
@@ -197,6 +197,11 @@ pub mod server {
             company_progress.current_post = None;
             progress_sender.send(company_progress.into_event()).await?;
         }
+
+        // invalidate poasts cache to see new results immediately
+        invalidate_poasts_cache().await.map_err(|e| {
+            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn Error>
+        })?;
         
         progress_sender
             .send(Ok(Event::default().data("[DONE]")))

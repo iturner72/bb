@@ -25,12 +25,8 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
     use serde_json::from_str;
     use std::fmt;
     use log::{info, error};
-    use once_cell::sync::Lazy;
-    use std::sync::Mutex;
-    use std::time::{Duration, Instant};
-
-    static CACHE: Lazy<Mutex<(Option<Vec<Poast>>, Instant)>> = Lazy::new(|| Mutex::new((None, Instant::now())));
-    const CACHE_DURATION: Duration = Duration::from_secs(3600);
+    use std::time::Instant;
+    use crate::server_fn::cache::{POASTS_CACHE, CACHE_DURATION};
 
     #[derive(Debug)]
     enum PoastError {
@@ -52,7 +48,7 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
     }
 
     let cache_duration = CACHE_DURATION;
-    let cached_data = CACHE.lock().unwrap().clone();
+    let cached_data = POASTS_CACHE.lock().unwrap().clone();
 
     // check cache
     if let (Some(cached_poasts), last_fetch) = cached_data {
@@ -104,7 +100,7 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
 
     // update cache
     {
-        let mut cache = CACHE.lock().unwrap();
+        let mut cache = POASTS_CACHE.lock().unwrap();
         *cache = (Some(poasts.clone()), Instant::now());
     }
 
