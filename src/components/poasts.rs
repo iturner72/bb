@@ -1,5 +1,6 @@
 use leptos::*;
 use serde::{Serialize, Deserialize};
+use crate::components::search::BlogSearch;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Poast {
@@ -20,7 +21,7 @@ pub struct Links {
 }
 
 #[server(GetPoasts, "/api")]
-pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
+pub async fn get_poasts(search_term: Option<String>) -> Result<Vec<Poast>, ServerFnError> {
     use crate::supabase::get_client;
     use serde_json::from_str;
     use std::fmt;
@@ -47,24 +48,37 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
         ServerFnError::ServerError(e.to_string())
     }
 
-    let cache_duration = CACHE_DURATION;
-    let cached_data = POASTS_CACHE.lock().unwrap().clone();
+    // check cache only if no search term is provided
+    if search_term.is_none() {
+        let cache_duration = CACHE_DURATION;
+        let cached_data = POASTS_CACHE.lock().unwrap().clone();
 
-    // check cache
-    if let (Some(cached_poasts), last_fetch) = cached_data {
-        if last_fetch.elapsed() < cache_duration {
-            info!("Returning cached poasts");
-            info!("Cache debug: {:?}", (cached_poasts.len(), last_fetch));
-            return Ok(cached_poasts);
+        if let (Some(cached_poasts), last_fetch) = cached_data {
+            if last_fetch.elapsed() < cache_duration {
+                info!("Returning cached poasts");
+                return Ok(cached_poasts);
+            }
         }
     }
 
     info!("fetching blog poasts from supabase...");
     let client = get_client();
 
-    let request = client
+    let mut request = client
         .from("poasts")
-        .select("id, published_at, company, title, link, summary, links!posts_company_fkey(logo_url)")
+        .select("id, published_at, company, title, link, summary, links!posts_company_fkey(logo_url)");
+
+    if let Some(ref term) = search_term {
+        if !term.trim().is_empty() {
+            info!("Searching for term: {}", term);
+            request = request.or(format!(
+                "title.ilike.%{}%,summary.ilike.%{}%",
+                term, term
+            ));
+        }
+    }
+
+    let request = request
         .order("published_at.desc")
         .limit(200);
 
@@ -99,7 +113,7 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
     info!("successfully parsed {} poasts", poasts.len());
 
     // update cache
-    {
+    if search_term.is_none() {
         let mut cache = POASTS_CACHE.lock().unwrap();
         *cache = (Some(poasts.clone()), Instant::now());
     }
@@ -109,7 +123,17 @@ pub async fn get_poasts() -> Result<Vec<Poast>, ServerFnError> {
 
 #[component]
 pub fn Poasts() -> impl IntoView {
-    let poasts = create_resource(|| (), |_| get_poasts());
+    let (search_input, set_search_input) = create_signal(String::new());
+    
+    let search_term = create_memo(move |_| {
+        Some(search_input.get())
+    });
+    
+    let poasts = create_resource(
+        move || search_term.get(),
+        get_poasts
+    );
+
     let (selected_company, set_selected_company) = create_signal(String::new());
     let (filtered_poasts, set_filtered_poasts) = create_signal(vec![]);
 
@@ -125,6 +149,8 @@ pub fn Poasts() -> impl IntoView {
 
     create_effect(move |_| {
         let company = selected_company().to_string();
+        let _ = search_term.get();
+
         poasts.with(|poasts_result| {
             match poasts_result {
                 Some(Ok(poasts)) => {
@@ -145,6 +171,8 @@ pub fn Poasts() -> impl IntoView {
 
     view! {
         <div class="pt-4 space-y-4">
+            <BlogSearch on_search=set_search_input/>
+
             <Suspense fallback=|| view! { <div class="pl-4 h-10"></div> }>
                 <div class="flex justify-start mb-2 pl-4">
                     {move || {
@@ -180,6 +208,7 @@ pub fn Poasts() -> impl IntoView {
                     }}
                 </div>
             </Suspense>
+
             <Suspense fallback=|| view! { <p class="text-center text-teal-600 dark:text-aqua-400">"Loading..."</p> }>
                 {move || {
                     let poasts = filtered_poasts();
@@ -198,6 +227,7 @@ pub fn Poasts() -> impl IntoView {
                     }
                 }}
             </Suspense>
+
         </div>
     }
 }
