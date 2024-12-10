@@ -2,6 +2,7 @@
 pub mod backfill {
     use axum::response::sse::Event;
     use serde_json::Value;
+    use std::collections::HashMap;
     use std::convert::Infallible;
     use async_openai::{
         config::OpenAIConfig,
@@ -76,6 +77,7 @@ pub mod backfill {
         info!("Starting backfill process for posts with missing data");
         let supabase = crate::supabase::get_client();
         let openai = Client::with_config(OpenAIConfig::default());
+        let mut company_states: HashMap<String, RssProgressUpdate> = HashMap::new();
 
         // find all post swith missing summaries or buzzwords
         info!("Querying Supabase for posts with missing summaries or buzzwords");
@@ -102,13 +104,15 @@ pub mod backfill {
 
             info!("Processing post {}/{}: '{}' from {}", index + 1, posts.len(), title, company);
 
-            let mut company_progress = RssProgressUpdate {
+            let company_progress = company_states.entry(company.clone()).or_insert(RssProgressUpdate {
                 company: company.clone(), 
                 status: "backfilling".to_string(),
                 new_posts: 0,
                 skipped_posts: 0,
                 current_post: Some(title.clone()),
-            };
+            });
+
+            company_progress.current_post = Some(title.clone());
 
             progress_sender.send(company_progress.clone().into_event())
                 .await
@@ -196,7 +200,7 @@ pub mod backfill {
                     error!("Failed to get insights for post '{}': {}", title, e);
                     company_progress.skipped_posts += 1;
                     company_progress.status = "failed".to_string();
-                    progress_sender.send(company_progress.into_event())
+                    progress_sender.send(company_progress.clone().into_event())
                         .await
                         .map_err(|e| BackfillError::Send(e.to_string()))?;
                 }
