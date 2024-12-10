@@ -1,5 +1,6 @@
 use leptos::*;
 use serde::{Serialize, Deserialize};
+use std::borrow::Cow;
 use crate::components::search::BlogSearch;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -80,7 +81,7 @@ pub async fn get_poasts(search_term: Option<String>) -> Result<Vec<Poast>, Serve
 
     let request = request
         .order("published_at.desc")
-        .limit(200);
+        .limit(30);
 
     let response = request
         .execute()
@@ -220,7 +221,12 @@ pub fn Poasts() -> impl IntoView {
                                 <For
                                     each=move || poasts.clone()
                                     key=|poast| poast.id
-                                    children=move |poast| view! { <BlogPoast poast=poast /> }
+                                    children=move |poast| view! { 
+                                        <BlogPoast 
+                                            poast=poast 
+                                            search_term=search_input.get()
+                                        /> 
+                                    }
                                 />
                             </div>
                         }
@@ -233,7 +239,10 @@ pub fn Poasts() -> impl IntoView {
 }
 
 #[component]
-pub fn BlogPoast(poast: Poast) -> impl IntoView {
+pub fn BlogPoast(
+    poast: Poast,
+    #[prop(into, optional)] search_term: String,
+) -> impl IntoView {
     view! {
         <div class="relative p-4">
             <a 
@@ -251,19 +260,86 @@ pub fn BlogPoast(poast: Poast) -> impl IntoView {
                     </div>
                     <div class="poast-headings flex flex-col w-full space-y-1">
                         <p class="text-sm md:text-base lg:text-lg text-gray-800 dark:text-gray-200">
-                            <span class="text-sm md:text-base lg:text-lg text-seafoam-600 dark:text-aqua-400 line-clamp-1 md:line-clamp-2 lg:line-clamp-2 font-medium">
-                                {&poast.title}
-                            </span>
+                            <HighlightedText
+                                text=Cow::from(&poast.title)
+                                search_term=search_term.clone()
+                                class="text-sm md:text-base lg:text-lg text-seafoam-600 dark:text-aqua-400 line-clamp-1 md:line-clamp-2 lg:line-clamp-2 font-medium"
+                            />
                         </p>
                         <p class="text-xs md:text-sm lg:text-base text-gray-500 dark:text-gray-400">{&poast.published_at}</p>
                     </div>
                     <div class="poast-summary mt-2 w-full">
                         {poast.summary.clone().map(|summary| view! {
-                            <p class="text-xs md:text-sm lg:text-base text-gray-600 dark:text-gray-300 line-clamp-2 md:line-clamp-3 lg:line-clamp-4">{summary}</p>
+                            <HighlightedText
+                                text=Cow::from(summary)
+                                search_term=search_term.clone()
+                                class="text-xs md:text-sm lg:text-base text-gray-600 dark:text-gray-300 line-clamp-2 md:line-clamp-3 lg:line-clamp-4"
+                            />
                         })}
                     </div>
                 </article>
             </a>
         </div>
+    }
+}
+
+// Helper function to get highlighted segments
+fn get_highlighted_segments(text: &str, search_term: &str) -> Vec<(String, bool)> {
+    if search_term.is_empty() {
+        return vec![(text.to_string(), false)];
+    }
+
+    let search_term = search_term.to_lowercase();
+    let mut result = Vec::new();
+    let mut last_index = 0;
+    let text_lower = text.to_lowercase();
+
+    while let Some(start_idx) = text_lower[last_index..].find(&search_term) {
+        let absolute_start = last_index + start_idx;
+        let absolute_end = absolute_start + search_term.len();
+
+        // Add non-matching segment if there is one
+        if absolute_start > last_index {
+            result.push((text[last_index..absolute_start].to_string(), false));
+        }
+
+        // Add matching segment (using original case from text)
+        result.push((text[absolute_start..absolute_end].to_string(), true));
+
+        last_index = absolute_end;
+    }
+
+    // Add remaining text if any
+    if last_index < text.len() {
+        result.push((text[last_index..].to_string(), false));
+    }
+
+    result
+}
+
+#[component]
+fn HighlightedText<'a>(
+    #[prop(into)] text: Cow<'a, str>,
+    #[prop(into)] search_term: String,
+    #[prop(optional)] class: &'static str,
+) -> impl IntoView {
+    let segments = get_highlighted_segments(&text, &search_term);
+    
+    view! {
+        <span class={class}>
+            {segments.into_iter().map(|(text, is_highlight)| {
+                if is_highlight {
+                    view! {
+                        <>
+                            <mark class="bg-mint-400 dark:bg-mint-900 text-seafoam-900 dark:text-seafoam-200 rounded px-0.5">
+                                {text}
+                            </mark>
+                        </>
+                    }
+                } else {
+                    view! { <><span>{text}</span></> }
+                }
+            }).collect_view()}
+        </span>
     }
 }
