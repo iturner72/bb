@@ -116,6 +116,11 @@ pub mod backfill {
                 }
                 None => {
                     info!("Scraping full_text for post '{}' from {}", title, link);
+                    company_progress.status = "scraping".to_string();
+                    progress_sender.send(company_progress.clone().into_event())
+                        .await
+                        .map_err(|e| BackfillError::Send(e.to_string()))?;
+
                     scrape_page(&link)
                         .await
                         .map_err(|e| BackfillError::Scrape(e.to_string()))?
@@ -130,12 +135,22 @@ pub mod backfill {
             );
 
             info!("Getting post insights from OpenAI for '{}'", title);
+            company_progress.status = "analyzing".to_string();
+            progress_sender.send(company_progress.clone().into_event())
+                .await
+                .map_err(|e| BackfillError::Send(e.to_string()))?;
+
             match get_post_insights(&openai, &title, &full_text)
                 .await
                 .map_err(|e| BackfillError::OpenAI(e.to_string()))
             {
                 Ok(insights) => {
                     info!("Successfully got insights for '{}'", title);
+
+                    company_progress.status = "updating".to_string();
+                    progress_sender.send(company_progress.clone().into_event())
+                        .await
+                        .map_err(|e| BackfillError::Send(e.to_string()))?;
 
                     let update = PostUpdate {
                         summary: insights.summary,
@@ -147,8 +162,6 @@ pub mod backfill {
                     let update_json = serde_json::to_string(&update)
                         .map_err(BackfillError::Json)?;
 
-                    info!("Update payload: {}", update_json);
-
                     match supabase
                         .from("poasts")
                         .update(&update_json)
@@ -159,25 +172,33 @@ pub mod backfill {
                         Ok(_) => {
                             info!("Successfully updated post '{}' in database", title);
                             company_progress.new_posts += 1;
+                            company_progress.status = "completed".to_string();
+                            progress_sender.send(company_progress.clone().into_event())
+                                .await
+                                .map_err(|e| BackfillError::Send(e.to_string()))?;
                         },
                         Err(e) => {
                             error!("Failed to update post '{}' in database: {}", title, e);
                             company_progress.skipped_posts += 1;
+                            company_progress.status = "failed".to_string();
+                            progress_sender.send(company_progress.clone().into_event())
+                                .await
+                                .map_err(|e| BackfillError::Send(e.to_string()))?;
                         }
                     }
                 },
                 Err(e) => {
                     error!("Failed to get insights for post '{}': {}", title, e);
                     company_progress.skipped_posts += 1;
+                    company_progress.status = "failed".to_string();
+                    progress_sender.send(company_progress.into_event())
+                        .await
+                        .map_err(|e| BackfillError::Send(e.to_string()))?;
                 }
             }
 
             // add small delay between poasts to help w rate limiting
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-
-            progress_sender.send(company_progress.into_event())
-                .await
-                .map_err(|e| BackfillError::Send(e.to_string()))?;
         }
 
         if posts.is_empty() {
