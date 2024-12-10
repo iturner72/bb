@@ -58,10 +58,15 @@ pub mod backfill {
         } else {
             // take the first and last portions to capture intro and conclusion
             let portion_size = char_limit / 2;
-            let start = cleaned.chars().take(portion_size).collect::<String>();
-            let end = cleaned.chars().take(portion_size).collect::<String>();
+            let start = cleaned.chars()
+                .take(portion_size)
+                .collect::<String>();
 
-            format!("{}... [text truncated] ...{}", start, end.chars().rev().collect::<String>())
+            let end = cleaned.chars()
+                .skip(cleaned.chars().count() - portion_size)
+                .collect::<String>();
+
+            format!("{}... [text truncated] ...{}", start, end) 
         }
     }
 
