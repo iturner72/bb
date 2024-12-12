@@ -1,32 +1,30 @@
 use leptos::*;
 use std::time::Duration;
+use leptos::leptos_dom::helpers::TimeoutHandle;
 
 #[component]
 pub fn BlogSearch(
     #[prop(into)] on_search: Callback<String>,
 ) -> impl IntoView {
     let (search_term, set_search_term) = create_signal(String::new());
+    let timeout_handle: StoredValue<Option<TimeoutHandle>> = store_value(None);
 
     // create debounced effect for search
-    create_effect(move |prev| {
+    create_effect(move |_| {
         let current = search_term.get();
 
-        // don't run on init or if search term has not changed
-        if let Some(prev_term) = prev {
-            if prev_term == current {
-                return current;
-            }
+        if let Some(handle) = timeout_handle.get_value() {
+            handle.clear();
         }
 
-        let current_clone = current.clone();
-        set_timeout_with_handle(
+        let handle = set_timeout_with_handle(
             move || {
-                on_search(current_clone);
+                on_search(current);
             },
             Duration::from_millis(500)
         ).expect("Failed to set timeout");
 
-        current
+        timeout_handle.set_value(Some(handle));
     });
 
     let clear_search = move |_| {

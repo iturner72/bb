@@ -67,7 +67,9 @@ pub async fn get_poasts(search_term: Option<String>) -> Result<Vec<Poast>, Serve
 
     let mut request = client
         .from("poasts")
-        .select("id, published_at, company, title, link, summary, links!posts_company_fkey(logo_url)");
+        .select("id, published_at, company, title, link, summary, links!posts_company_fkey(logo_url)")
+        .order("published_at.desc")
+        .limit(30);
 
     if let Some(ref term) = search_term {
         if !term.trim().is_empty() {
@@ -78,10 +80,6 @@ pub async fn get_poasts(search_term: Option<String>) -> Result<Vec<Poast>, Serve
             ));
         }
     }
-
-    let request = request
-        .order("published_at.desc")
-        .limit(30);
 
     let response = request
         .execute()
