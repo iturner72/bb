@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use leptos_meta::*;
 use leptos_router::{
     components::{FlatRoutes, Route, Router, A},
-    StaticSegment,
+    path,
 };
 
 use crate::components::poasts::Poasts;
@@ -38,9 +38,9 @@ pub fn App() -> impl IntoView {
     view! {
         <Router>
             <FlatRoutes fallback=|| "page not found.">
-               <Route path=StaticSegment("") view=HomePage/>
-               <Route path=StaticSegment("admin") view=AdminLogin/>
-               <Route path=StaticSegment("admin-panel") view=ProtectedAdminPanel/>
+               <Route path=path!("") view=HomePage/>
+               <Route path=path!("admin") view=AdminLogin/>
+               <Route path=path!("admin-panel") view=ProtectedAdminPanel/>
             </FlatRoutes>
         </Router>
     }
@@ -98,7 +98,7 @@ fn ProtectedAdminPanel() -> impl IntoView {
                         </A>
                     </div>
                 </div>
-            }.into_view()
+            }.into_any()
             children=move || view! {
                 <div class="w-full mx-auto bg-gray-100 dark:bg-teal-900 min-h-screen">
                     <div class="flex justify-between items-center p-4">
@@ -130,7 +130,7 @@ fn ProtectedAdminPanel() -> impl IntoView {
                         </div>
                     </div>
                 </div>
-            }.into_view()
+            }.into_any()
         />
     }
 }
