@@ -1,5 +1,4 @@
 use leptos::prelude::*;
-use leptos::html::*;
 use serde::{Serialize, Deserialize};
 use std::borrow::Cow;
 use crate::components::search::BlogSearch;
@@ -200,9 +199,9 @@ pub fn Poasts() -> impl IntoView {
                                                 }
                                             </select>
                                         </>
-                                    }
+                                    }.into_any()
                                 }
-                                Err(_) => view! { <><div></div></> }
+                                Err(_) => view! { <><div></div></> }.into_any()
                             }
                         })
                     }}
@@ -213,7 +212,7 @@ pub fn Poasts() -> impl IntoView {
                 {move || {
                     let poasts = filtered_poasts();
                     if poasts.is_empty() {
-                        view! { <div class="text-center text-gray-500 dark:text-gray-400">"No posts found"</div> }
+                        view! { <div class="text-center text-gray-500 dark:text-gray-400">"No posts found"</div> }.into_any()
                     } else {
                         view! {
                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -228,7 +227,7 @@ pub fn Poasts() -> impl IntoView {
                                     }
                                 />
                             </div>
-                        }
+                        }.into_any()
                     }
                 }}
             </Suspense>
@@ -327,18 +326,17 @@ fn HighlightedText<'a>(
     view! {
         <span class={class}>
             {segments.into_iter().map(|(text, is_highlight)| {
-                let element: View<_> = if is_highlight {
+                if is_highlight {
                     view! {
-                        <span class="bg-mint-400 dark:bg-mint-900 text-seafoam-900 dark:text-seafoam-200 rounded px-0.5">
+                        <mark class="bg-mint-400 dark:bg-mint-900 text-seafoam-900 dark:text-seafoam-200 rounded px-0.5">
                             {text}
-                        </span>
-                    }.into_view()
+                        </mark>
+                    }.into_any()
                 } else {
-                    view! {
-                        <span class="bg-mint-400 dark:bg-mint-900 text-seafoam-900 dark:text-seafoam-200 rounded px-0.5">{text}</span>
-                    }.into_view()
-                };
-                element
+                    view! { 
+                        <span>{text}</span> 
+                    }.into_any()
+                }
             }).collect_view()}
         </span>
     }

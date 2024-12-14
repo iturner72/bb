@@ -40,7 +40,7 @@ pub fn App() -> impl IntoView {
             <FlatRoutes fallback=|| "page not found.">
                <Route path=StaticSegment("") view=HomePage/>
                <Route path=StaticSegment("admin") view=AdminLogin/>
-//               <Route path=StaticSegment("admin-panel") view=ProtectedAdminPanel/>
+               <Route path=StaticSegment("admin-panel") view=ProtectedAdminPanel/>
             </FlatRoutes>
         </Router>
     }
