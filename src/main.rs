@@ -20,10 +20,9 @@ cfg_if! {
         use std::collections::HashMap;
         use dotenv::dotenv;
         use env_logger::Env;
-        use leptos::*;
+        use leptos::prelude::*;
         use leptos_axum::{generate_route_list, handle_server_fns_with_context, LeptosRoutes};
         use bb::app::*;
-        use bb::fileserv::file_and_error_handler;
         use bb::rss_service::server::process_feeds_with_progress;
         use bb::state::AppState;
 
@@ -72,7 +71,7 @@ cfg_if! {
             dotenv().ok();
             env_logger::init_from_env(Env::default().default_filter_or("info"));
 
-            let conf = get_configuration(None).await.unwrap();
+            let conf = get_configuration(None).unwrap();
             let leptos_options = conf.leptos_options;
             let addr = leptos_options.site_addr;
             let routes = generate_route_list(App);
@@ -109,8 +108,7 @@ cfg_if! {
                 .route("/api/rss-progress", get(rss_progress_handler))
                 .route("/api/backfill-progress", get(backfill_progress_handler))
                 .leptos_routes_with_handler(routes, get(|State(app_state): State<AppState>, request: Request<AxumBody>| async move {
-                    let handler = leptos_axum::render_app_async_with_context(
-                        app_state.leptos_options.clone(),
+                    let handler = leptos_axum::render_app_to_stream_with_context(
                         move || {
                             provide_context(app_state.clone());
                         },
@@ -118,13 +116,13 @@ cfg_if! {
                     );
                     handler(request).await.into_response()
                 }))
-                .fallback(leptos_axum::file_and_error_handler(shell))
+                .fallback(leptos_axum::file_and_error_handler::<AppState, _>(shell))
                 .with_state(app_state);
 
             log::info!("Starting server at {}", addr);
 
             let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-            logging::log!("listening on http://{}", &addr);
+            log::info!("listening on http://{}", &addr);
             axum::serve(listener, app.into_make_service()).await.unwrap();
         }
     } else {
