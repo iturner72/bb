@@ -59,7 +59,7 @@ pub mod jwt {
 
 #[cfg(feature = "ssr")]
 use super::types::{AuthResponse, AuthError, to_server_error};
-use leptos::*;
+use leptos::prelude::*;
 impl crate::auth::api::AdminLoginFn {
     pub async fn run(username: String, password: String) -> Result<AuthResponse, ServerFnError> {
         let admin_user = std::env::var("ADMIN_USERNAME")
