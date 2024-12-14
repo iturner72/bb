@@ -112,7 +112,7 @@ cfg_if! {
                         move || {
                             provide_context(app_state.clone());
                         },
-                        move || view! { <App/> },
+                        move || shell(leptos_options.clone()) 
                     );
                     handler(request).await.into_response()
                 }))
