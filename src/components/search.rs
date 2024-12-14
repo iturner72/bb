@@ -4,7 +4,7 @@ use leptos::leptos_dom::helpers::TimeoutHandle;
 
 #[component]
 pub fn BlogSearch(
-    #[prop(into)] on_search: Callback<String>,
+    #[prop(into)] on_search: Callback<(String,)>,
 ) -> impl IntoView {
     let (search_term, set_search_term) = signal(String::new());
     let timeout_handle: StoredValue<Option<TimeoutHandle>> = StoredValue::new(None);
@@ -19,7 +19,7 @@ pub fn BlogSearch(
 
         let handle = set_timeout_with_handle(
             move || {
-                on_search(current);
+                on_search.run((current,));
             },
             Duration::from_millis(500)
         ).expect("Failed to set timeout");
@@ -28,7 +28,7 @@ pub fn BlogSearch(
     });
 
     let clear_search = move |_| {
-        on_search(String::new());
+        on_search.run((String::new(),));
         set_search_term(String::new());
     };
 
