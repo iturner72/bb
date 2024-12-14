@@ -108,10 +108,10 @@ pub fn BatchProcessor() -> impl IntoView {
                                     <div class=format!("p-4 rounded-lg border-l-4 bg-gray-100 dark:bg-teal-800 {}", border_class)>
                                         <div class="flex justify-between items-center mb-2">
                                             <span class="font-medium text-gray-800 dark:text-gray-200">
-                                                {&update.company}
+                                                {update.company.clone()}
                                             </span>
                                             <span class=format!("px-2 py-1 text-sm rounded {}", status_class)>
-                                                {&update.status}
+                                                {update.status.clone()}
                                             </span>
                                         </div>
                                         
@@ -124,22 +124,25 @@ pub fn BatchProcessor() -> impl IntoView {
                                                 <span>"Skipped"</span>
                                                 <span class="text-right">{update.skipped_posts}</span>
                                             </div>
-                                            {update.current_post.as_ref().map(|post| view! {
-                                                <div class="mt-2">
-                                                    <span class="text-gray-500 dark:text-gray-400">"Current: "</span>
-                                                    <span class="text-gray-700 dark:text-gray-200 line-clamp-1">
-                                                        {post}
-                                                    </span>
-                                                </div>
+                                            {update.current_post.as_ref().map(|post| {
+                                                let post = post.clone();
+                                                view! {
+                                                    <div class="mt-2">
+                                                        <span class="text-gray-500 dark:text-gray-400">"Current: "</span>
+                                                        <span class="text-gray-700 dark:text-gray-200 line-clamp-1">
+                                                            {move || post.clone()}
+                                                        </span>
+                                                    </div>
+                                                }
                                             })}
                                         </div>
                                     </div>
                                 }
                             }).collect_view()}
                         </div>
-                    }
+                    }.into_any()
                 } else {
-                    view! { <div></div> }
+                    view! { <div></div> }.into_any()
                 }
             }}
         </div>

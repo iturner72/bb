@@ -192,7 +192,7 @@ pub fn Poasts() -> impl IntoView {
                                                 {companies.into_iter()
                                                     .map(|company| {
                                                         view! {
-                                                            <option value={company.clone()}>{company}</option>
+                                                            <option value={company.clone()}>{company.clone()}</option>
                                                         }
                                                     })
                                                     .collect_view()
@@ -241,6 +241,8 @@ pub fn BlogPoast(
     poast: Poast,
     #[prop(into, optional)] search_term: String,
 ) -> impl IntoView {
+    let company = Memo::new(move |_| poast.company.clone());
+    
     view! {
         <div class="relative p-4">
             <a 
@@ -251,23 +253,34 @@ pub fn BlogPoast(
             >
                 <article class="base-poast flex flex-col items-start cursor-pointer h-full w-full bg-white dark:bg-teal-800 border-2 border-gray-200 dark:border-teal-700 hover:border-seafoam-500 dark:hover:border-aqua-500 p-4 rounded-lg shadow-md hover:shadow-lg transition-all">
                     <div class="flex items-center pb-2 max-w-1/2">
-                        {poast.links.clone().and_then(|links| links.logo_url).map(|url| view! {
-                            <img src={url} alt={format!("{} logo", poast.company)} class="w-8 h-8 mr-2 rounded-sm" />
-                        })}
-                        <h2 class="text-sm md:text-base lg:text-lg text-teal-600 dark:text-mint-400 font-semibold truncate">{&poast.company}</h2>
+                        {move || {
+                            let company_val = company.get();
+                            poast.links.clone().and_then(|links| links.logo_url).map(|url| view! {
+                                <img 
+                                    src={url} 
+                                    alt={format!("{} logo", company_val)} 
+                                    class="w-8 h-8 mr-2 rounded-sm" 
+                                />
+                            })
+                        }}
+                        <h2 class="text-sm md:text-base lg:text-lg text-teal-600 dark:text-mint-400 font-semibold truncate">
+                            {move || company.get()}
+                        </h2>
                     </div>
                     <div class="poast-headings flex flex-col w-full space-y-1">
                         <p class="text-sm md:text-base lg:text-lg text-gray-800 dark:text-gray-200">
                             <HighlightedText
-                                text=Cow::from(&poast.title)
+                                text=Cow::from(poast.title.clone())
                                 search_term=search_term.clone()
                                 class="text-sm md:text-base lg:text-lg text-seafoam-600 dark:text-aqua-400 line-clamp-1 md:line-clamp-2 lg:line-clamp-2 font-medium"
                             />
                         </p>
-                        <p class="text-xs md:text-sm lg:text-base text-gray-500 dark:text-gray-400">{&poast.published_at}</p>
+                        <p class="text-xs md:text-sm lg:text-base text-gray-500 dark:text-gray-400">
+                            {poast.published_at.clone()}
+                        </p>
                     </div>
                     <div class="poast-summary mt-2 w-full">
-                        {poast.summary.clone().map(|summary| view! {
+                        {move || poast.summary.clone().map(|summary| view! {
                             <HighlightedText
                                 text=Cow::from(summary)
                                 search_term=search_term.clone()
