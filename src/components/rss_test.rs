@@ -76,54 +76,62 @@ pub fn RssTest() -> impl IntoView {
                         <div class="mt-4 p-4 text-center text-gray-500 dark:text-gray-600">
                             "Waiting to start processing..."
                         </div>
-                    }
+                    }.into_any()
                 } else {
+                    let updates: Vec<_> = states.values().cloned().collect();
                     view! {
                         <div class="mt-4 grid gap-3">
-                            {states.values().map(|update| {
-                                let class = match update.status.as_str() {
-                                    "completed" => "bg-gray-200 dark:bg-teal-900 p-3 rounded-lg border-l-4 border-seafoam-500 dark:border-mint-800 translate-x-1",
-                                    "processing" => "bg-gray-200 dark:bg-teal-900 p-3 rounded-lg border-l-4 border-aqua-500 dark:border-seafoam-400",
-                                    _ => "bg-gray-200 dark:bg-teal-900 p-3 rounded-lg border-l-4 border-gray-400 dark:border-gray-800 opacity-50"
-                                };
-                                let status_class = if update.status == "completed" {
-                                    "text-xs md:text-sm px-2 py-1 rounded bg-seafoam-200 dark:bg-mint-900/30 text-seafoam-900 dark:text-mint-700"
-                                } else {
-                                    "text-xs md:text-sm px-2 py-1 rounded bg-aqua-200 dark:bg-seafoam-900/30 text-aqua-900 dark:text-seafoam-300"
-                                };
-                                view! {
-                                    <div class={class}>
-                                        <div class="flex justify-between items-center gap-2">
-                                            <span class="text-seafoam-800 dark:text-mint-600 font-medium textsm md:text-base truncate">
-                                                {update.company.clone()}
-                                            </span>
-                                            <span class={format!("{} whitespace-nowrap", status_class)}>
-                                                {update.status.clone()}
-                                            </span>
-                                        </div>
-                                        <div class="mt-2 text-xs md:text-sm grid gap-1">
-                                            <div class="grid grid-cols-2 text-seafoam-800 dark:text-mint-600">
-                                                <span>"New posts"</span>
-                                                <span class="text-right">{update.new_posts}</span>
+                            <For
+                                each=move || updates.clone()
+                                key=|update| update.company.clone()
+                                children=move |update| {
+                                    let class = match update.status.as_str() {
+                                        "completed" => "bg-gray-200 dark:bg-teal-900 p-3 rounded-lg border-l-4 border-seafoam-500 dark:border-mint-800 translate-x-1",
+                                        "processing" => "bg-gray-200 dark:bg-teal-900 p-3 rounded-lg border-l-4 border-aqua-500 dark:border-seafoam-400",
+                                        _ => "bg-gray-200 dark:bg-teal-900 p-3 rounded-lg border-l-4 border-gray-400 dark:border-gray-800 opacity-50"
+                                    };
+                                    let status_class = if update.status == "completed" {
+                                        "text-xs md:text-sm px-2 py-1 rounded bg-seafoam-200 dark:bg-mint-900/30 text-seafoam-900 dark:text-mint-700"
+                                    } else {
+                                        "text-xs md:text-sm px-2 py-1 rounded bg-aqua-200 dark:bg-seafoam-900/30 text-aqua-900 dark:text-seafoam-300"
+                                    };
+                                    view! {
+                                        <div class={class}>
+                                            <div class="flex justify-between items-center gap-2">
+                                                <span class="text-seafoam-800 dark:text-mint-600 font-medium textsm md:text-base truncate">
+                                                    {move || update.company.clone()}
+                                                </span>
+                                                <span class={format!("{} whitespace-nowrap", status_class)}>
+                                                    {move || update.status.clone()}
+                                                </span>
                                             </div>
-                                            <div class="grid grid-cols-2 text-seafoam-800 dark:text-mint-600">
-                                                <span>"Skipped posts"</span>
-                                                <span class="text-right">{update.skipped_posts}</span>
-                                            </div>
-                                            {update.current_post.as_ref().map(|post| view! {
-                                                <div class="mt-2 space-y-1">
-                                                    <span class="text-gray-500 text-xs">"Processing: "</span>
-                                                    <span class="text-seafoam-600 dark:text-seafoam-300 text-sm line-clamp-2">
-                                                        {post}
-                                                    </span>
+                                            <div class="mt-2 text-xs md:text-sm grid gap-1">
+                                                <div class="grid grid-cols-2 text-seafoam-800 dark:text-mint-600">
+                                                    <span>"New posts"</span>
+                                                    <span class="text-right">{move || update.new_posts}</span>
                                                 </div>
-                                            })}
+                                                <div class="grid grid-cols-2 text-seafoam-800 dark:text-mint-600">
+                                                    <span>"Skipped posts"</span>
+                                                    <span class="text-right">{move || update.skipped_posts}</span>
+                                                </div>
+                                                {update.current_post.as_ref().map(|post| {
+                                                    let post = post.clone();
+                                                    view! {
+                                                        <div class="mt-2 space-y-1">
+                                                            <span class="text-gray-500 text-xs">"Processing: "</span>
+                                                            <span class="text-seafoam-600 dark:text-seafoam-300 text-sm line-clamp-2">
+                                                                {move || post.clone()}
+                                                            </span>
+                                                        </div>
+                                                    }
+                                                })}
+                                            </div>
                                         </div>
-                                    </div>
+                                    }
                                 }
-                            }).collect_view()}
+                            />
                         </div>
-                    }
+                    }.into_any()
                 }
             }}
         </div>
