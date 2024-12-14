@@ -1,4 +1,4 @@
-use leptos::*;
+use leptos::prelude::*;
 use super::types::AuthResponse;
 
 #[server(AdminLoginFn, "/api")]

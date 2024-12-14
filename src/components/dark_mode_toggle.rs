@@ -1,4 +1,4 @@
-use leptos::*;
+use leptos::prelude::*;
 use web_sys::{window, Storage};
 
 fn get_local_storage() -> Storage {
@@ -19,9 +19,9 @@ fn set_item(key: &str, value: &str) {
 
 #[component]
 pub fn DarkModeToggle() -> impl IntoView {
-    let (is_dark, set_is_dark) = create_signal(false);
+    let (is_dark, set_is_dark) = signal(false);
 
-    create_effect(move |_| {
+    Effect::new(move |_| {
         let is_dark_mode = get_item("darkMode").map(|v| v == "true").unwrap_or(false);
         set_is_dark.set(is_dark_mode);
         let window = window().expect("Failed to get window");

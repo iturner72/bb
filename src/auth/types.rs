@@ -1,5 +1,5 @@
 use std::fmt;
-use leptos::*;
+use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -1,4 +1,4 @@
-use leptos::*;
+use leptos::prelude::*;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use web_sys::{EventSource, MessageEvent, ErrorEvent};
@@ -7,7 +7,7 @@ use crate::server_fn::RssProgressUpdate;
 
 #[component]
 pub fn RssTest() -> impl IntoView {
-    let (progress_states, set_progress_states) = create_signal::<HashMap<String, RssProgressUpdate>>(HashMap::new());
+    let (progress_states, set_progress_states) = signal::<HashMap<String, RssProgressUpdate>>(HashMap::new());
 
     let start_streaming = move || {
         let event_source = EventSource::new("/api/rss-progress")
