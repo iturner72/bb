@@ -7,8 +7,6 @@ pub mod rss_service;
 pub mod backfill_service;
 pub mod auth;
 pub mod server_fn;
-#[cfg(feature = "ssr")]
-pub mod fileserv;
 
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]
