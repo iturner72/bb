@@ -1,37 +1,47 @@
-use crate::error_template::{AppError, ErrorTemplate};
-use leptos::*;
+use leptos::prelude::*;
 use leptos_meta::*;
-use leptos_router::*;
+use leptos_router::{
+    components::{FlatRoutes, Route, Router, A},
+    StaticSegment,
+};
+
 use crate::components::poasts::Poasts;
 use crate::components::rss_test::RssTest;
 use crate::components::batch_processor::BatchProcessor;
 use crate::components::dark_mode_toggle::DarkModeToggle;
 use crate::auth::auth_components::{AdminLogin, ProtectedRoute};
 
+pub fn shell(options: LeptosOptions) -> impl IntoView {
+    view! {
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1" />
+              <AutoReload options=options.clone() />
+              <HydrationScripts options/>
+              <link rel="stylesheet" id="leptos" href="/pkg/leptos_tailwind.css"/>
+              <link rel="shortcut icon" type="image/ico" href="/favicon.ico"/>
+              <MetaTags/>
+          </head>
+          <body>
+              <App/>
+          </body>
+        </html>
+    }
+}
+
 #[component]
 pub fn App() -> impl IntoView {
     provide_meta_context();
 
     view! {
-        <Stylesheet id="leptos" href="/pkg/bb.css"/>
-        
-        <Title text="Welcome to Leptos"/>
-        
-        <Router fallback=|| {
-            let mut outside_errors = Errors::default();
-            outside_errors.insert_with_default_key(AppError::NotFound);
-            view! {
-                <ErrorTemplate outside_errors/>
-            }
-            .into_view()
-        }>
-            <main>
-                <Routes>
-                    <Route path="" view=HomePage/>
-                    <Route path="admin" view=AdminLogin/>
-                    <Route path="admin-panel" view=ProtectedAdminPanel/>
-                </Routes>
-            </main>
+        <Router>
+            <FlatRoutes fallback=|| "page not found.">
+               <Route path=StaticSegment("") view=HomePage/>
+               <Route path=StaticSegment("admin") view=AdminLogin/>
+//               <Route path=StaticSegment("admin-panel") view=ProtectedAdminPanel/>
+            </FlatRoutes>
         </Router>
     }
 }
@@ -67,60 +77,60 @@ fn HomePage() -> impl IntoView {
     }
 }
 
-#[component]
-fn ProtectedAdminPanel() -> impl IntoView {
-    view! {
-        <ProtectedRoute
-            fallback=move || view! {
-                <div class="flex min-h-screen items-center justify-center bg-gray-100 dark:bg-teal-900">
-                    <div class="text-center">
-                        <h2 class="text-xl text-gray-800 dark:text-gray-200 mb-4">
-                            "Access Denied"
-                        </h2>
-                        <p class="text-gray-600 dark:text-gray-400 mb-4">
-                            "You need to be logged in to access this page."
-                        </p>
-                        <A
-                            href="/admin"
-                            class="text-seafoam-600 dark:text-seafoam-400 hover:underline"
-                        >
-                            "Go to Login"
-                        </A>
-                    </div>
-                </div>
-            }.into_view()
-            children=move || view! {
-                <div class="w-full mx-auto bg-gray-100 dark:bg-teal-900 min-h-screen">
-                    <div class="flex justify-between items-center p-4">
-                        <h1 class="text-3xl text-left text-seafoam-600 dark:text-mint-400 font-bold">
-                            "admin panel"
-                        </h1>
-                        <div class="flex items-center space-x-4">
-                            <A
-                                href="/"
-                                class="text-teal-600 dark:text-aqua-400 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors duration-200"
-                            >
-                                "home"
-                            </A>
-                            <DarkModeToggle/>
-                        </div>
-                    </div>
-                    <div class="max-w-7xl mx-auto px-4 py-6 space-y-8">
-                        <div>
-                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
-                                "RSS Feed Processing"
-                            </h2>
-                            <RssTest/>
-                        </div>
-                        <div>
-                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
-                                "Backfill Missing Data"
-                            </h2>
-                            <BatchProcessor/>
-                        </div>
-                    </div>
-                </div>
-            }.into_view()
-        />
-    }
-}
+//#[component]
+//fn ProtectedAdminPanel() -> impl IntoView {
+//    view! {
+//        <ProtectedRoute
+//            fallback=move || view! {
+//                <div class="flex min-h-screen items-center justify-center bg-gray-100 dark:bg-teal-900">
+//                    <div class="text-center">
+//                        <h2 class="text-xl text-gray-800 dark:text-gray-200 mb-4">
+//                            "Access Denied"
+//                        </h2>
+//                        <p class="text-gray-600 dark:text-gray-400 mb-4">
+//                            "You need to be logged in to access this page."
+//                        </p>
+//                        <A
+//                            href="/admin"
+//                            class="text-seafoam-600 dark:text-seafoam-400 hover:underline"
+//                        >
+//                            "Go to Login"
+//                        </A>
+//                    </div>
+//                </div>
+//            }.into_view()
+//            children=move || view! {
+//                <div class="w-full mx-auto bg-gray-100 dark:bg-teal-900 min-h-screen">
+//                    <div class="flex justify-between items-center p-4">
+//                        <h1 class="text-3xl text-left text-seafoam-600 dark:text-mint-400 font-bold">
+//                            "admin panel"
+//                        </h1>
+//                        <div class="flex items-center space-x-4">
+//                            <A
+//                                href="/"
+//                                class="text-teal-600 dark:text-aqua-400 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors duration-200"
+//                            >
+//                                "home"
+//                            </A>
+//                            <DarkModeToggle/>
+//                        </div>
+//                    </div>
+//                    <div class="max-w-7xl mx-auto px-4 py-6 space-y-8">
+//                        <div>
+//                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
+//                                "RSS Feed Processing"
+//                            </h2>
+//                            <RssTest/>
+//                        </div>
+//                        <div>
+//                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
+//                                "Backfill Missing Data"
+//                            </h2>
+//                            <BatchProcessor/>
+//                        </div>
+//                    </div>
+//                </div>
+//            }.into_view()
+//        />
+//    }
+//}
