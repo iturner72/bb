@@ -8,7 +8,7 @@ pub fn AdminLogin() -> impl IntoView {
     let (password, set_password) = signal(String::new());
     let (error, set_error) = signal(Option::<String>::None);
     
-    let login_action = create_server_action::<AdminLoginFn>();
+    let login_action = ServerAction::<AdminLoginFn>::new();
     
     Effect::new(move |_| {
         if let Some(Ok(auth_response)) = login_action.value().get() {
@@ -109,8 +109,8 @@ pub fn ProtectedRoute<F, C>(
     children: C,
 ) -> impl IntoView 
 where
-    F: Fn() -> View + 'static,
-    C: Fn() -> View + 'static,
+    F: Fn() -> AnyView + Send + 'static,
+    C: Fn() -> AnyView + Send + 'static,
 {
     let (is_authenticated, set_is_authenticated) = signal(false);
     
