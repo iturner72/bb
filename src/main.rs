@@ -118,7 +118,7 @@ cfg_if! {
                     );
                     handler(request).await.into_response()
                 }))
-                .fallback(file_and_error_handler)
+                .fallback(leptos_axum::file_and_error_handler(shell))
                 .with_state(app_state);
 
             log::info!("Starting server at {}", addr);
