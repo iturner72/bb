@@ -77,60 +77,60 @@ fn HomePage() -> impl IntoView {
     }
 }
 
-//#[component]
-//fn ProtectedAdminPanel() -> impl IntoView {
-//    view! {
-//        <ProtectedRoute
-//            fallback=move || view! {
-//                <div class="flex min-h-screen items-center justify-center bg-gray-100 dark:bg-teal-900">
-//                    <div class="text-center">
-//                        <h2 class="text-xl text-gray-800 dark:text-gray-200 mb-4">
-//                            "Access Denied"
-//                        </h2>
-//                        <p class="text-gray-600 dark:text-gray-400 mb-4">
-//                            "You need to be logged in to access this page."
-//                        </p>
-//                        <A
-//                            href="/admin"
-//                            class="text-seafoam-600 dark:text-seafoam-400 hover:underline"
-//                        >
-//                            "Go to Login"
-//                        </A>
-//                    </div>
-//                </div>
-//            }.into_view()
-//            children=move || view! {
-//                <div class="w-full mx-auto bg-gray-100 dark:bg-teal-900 min-h-screen">
-//                    <div class="flex justify-between items-center p-4">
-//                        <h1 class="text-3xl text-left text-seafoam-600 dark:text-mint-400 font-bold">
-//                            "admin panel"
-//                        </h1>
-//                        <div class="flex items-center space-x-4">
-//                            <A
-//                                href="/"
-//                                class="text-teal-600 dark:text-aqua-400 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors duration-200"
-//                            >
-//                                "home"
-//                            </A>
-//                            <DarkModeToggle/>
-//                        </div>
-//                    </div>
-//                    <div class="max-w-7xl mx-auto px-4 py-6 space-y-8">
-//                        <div>
-//                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
-//                                "RSS Feed Processing"
-//                            </h2>
-//                            <RssTest/>
-//                        </div>
-//                        <div>
-//                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
-//                                "Backfill Missing Data"
-//                            </h2>
-//                            <BatchProcessor/>
-//                        </div>
-//                    </div>
-//                </div>
-//            }.into_view()
-//        />
-//    }
-//}
+#[component]
+fn ProtectedAdminPanel() -> impl IntoView {
+    view! {
+        <ProtectedRoute
+            fallback=move || view! {
+                <div class="flex min-h-screen items-center justify-center bg-gray-100 dark:bg-teal-900">
+                    <div class="text-center">
+                        <h2 class="text-xl text-gray-800 dark:text-gray-200 mb-4">
+                            "Access Denied"
+                        </h2>
+                        <p class="text-gray-600 dark:text-gray-400 mb-4">
+                            "You need to be logged in to access this page."
+                        </p>
+                        <A
+                            href="/admin"
+                            class="text-seafoam-600 dark:text-seafoam-400 hover:underline"
+                        >
+                            "Go to Login"
+                        </A>
+                    </div>
+                </div>
+            }.into_view()
+            children=move || view! {
+                <div class="w-full mx-auto bg-gray-100 dark:bg-teal-900 min-h-screen">
+                    <div class="flex justify-between items-center p-4">
+                        <h1 class="text-3xl text-left text-seafoam-600 dark:text-mint-400 font-bold">
+                            "admin panel"
+                        </h1>
+                        <div class="flex items-center space-x-4">
+                            <A
+                                href="/"
+                                class="text-teal-600 dark:text-aqua-400 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors duration-200"
+                            >
+                                "home"
+                            </A>
+                            <DarkModeToggle/>
+                        </div>
+                    </div>
+                    <div class="max-w-7xl mx-auto px-4 py-6 space-y-8">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
+                                "RSS Feed Processing"
+                            </h2>
+                            <RssTest/>
+                        </div>
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
+                                "Backfill Missing Data"
+                            </h2>
+                            <BatchProcessor/>
+                        </div>
+                    </div>
+                </div>
+            }.into_view()
+        />
+    }
+}

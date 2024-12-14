@@ -1,4 +1,4 @@
-use::leptos::*;
+use::leptos::prelude::*;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use web_sys::{EventSource, MessageEvent, ErrorEvent};
@@ -8,9 +8,9 @@ use crate::server_fn::RssProgressUpdate;
 
 #[component]
 pub fn BatchProcessor() -> impl IntoView {
-    let (progress_states, set_progress_states) = create_signal::<HashMap<String, RssProgressUpdate>>(HashMap::new());
-    let (is_processing, set_is_processing) = create_signal(false);
-    let (no_posts_to_process, set_no_posts_to_process) = create_signal(false);
+    let (progress_states, set_progress_states) = signal::<HashMap<String, RssProgressUpdate>>(HashMap::new());
+    let (is_processing, set_is_processing) = signal(false);
+    let (no_posts_to_process, set_no_posts_to_process) = signal(false);
 
     let start_backfill = move || {
         set_is_processing(true);

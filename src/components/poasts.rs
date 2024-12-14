@@ -1,4 +1,5 @@
-use leptos::*;
+use leptos::prelude::*;
+use leptos::html::*;
 use serde::{Serialize, Deserialize};
 use std::borrow::Cow;
 use crate::components::search::BlogSearch;
@@ -122,19 +123,19 @@ pub async fn get_poasts(search_term: Option<String>) -> Result<Vec<Poast>, Serve
 
 #[component]
 pub fn Poasts() -> impl IntoView {
-    let (search_input, set_search_input) = create_signal(String::new());
+    let (search_input, set_search_input) = signal(String::new());
     
-    let search_term = create_memo(move |_| {
+    let search_term = Memo::new(move |_| {
         Some(search_input.get())
     });
     
-    let poasts = create_resource(
+    let poasts = Resource::new(
         move || search_term.get(),
         get_poasts
     );
 
-    let (selected_company, set_selected_company) = create_signal(String::new());
-    let (filtered_poasts, set_filtered_poasts) = create_signal(vec![]);
+    let (selected_company, set_selected_company) = signal(String::new());
+    let (filtered_poasts, set_filtered_poasts) = signal(vec![]);
 
     let get_unique_companies = move |posts: &[Poast]| -> Vec<String> {
         let mut companies: Vec<String> = posts
@@ -146,7 +147,7 @@ pub fn Poasts() -> impl IntoView {
         companies
     };
 
-    create_effect(move |_| {
+    Effect::new(move |_| {
         let company = selected_company().to_string();
         let _ = search_term.get();
 
@@ -322,21 +323,22 @@ fn HighlightedText<'a>(
     #[prop(optional)] class: &'static str,
 ) -> impl IntoView {
     let segments = get_highlighted_segments(&text, &search_term);
-    
+
     view! {
         <span class={class}>
             {segments.into_iter().map(|(text, is_highlight)| {
-                if is_highlight {
+                let element: View<_> = if is_highlight {
                     view! {
-                        <>
-                            <mark class="bg-mint-400 dark:bg-mint-900 text-seafoam-900 dark:text-seafoam-200 rounded px-0.5">
-                                {text}
-                            </mark>
-                        </>
-                    }
+                        <span class="bg-mint-400 dark:bg-mint-900 text-seafoam-900 dark:text-seafoam-200 rounded px-0.5">
+                            {text}
+                        </span>
+                    }.into_view()
                 } else {
-                    view! { <><span>{text}</span></> }
-                }
+                    view! {
+                        <span class="bg-mint-400 dark:bg-mint-900 text-seafoam-900 dark:text-seafoam-200 rounded px-0.5">{text}</span>
+                    }.into_view()
+                };
+                element
             }).collect_view()}
         </span>
     }

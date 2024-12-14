@@ -1,15 +1,16 @@
-use leptos::*;
+use leptos::prelude::*;
+use leptos::task::spawn_local;
 use super::api::{AdminLoginFn, verify_token};
 
 #[component]
 pub fn AdminLogin() -> impl IntoView {
-    let (username, set_username) = create_signal(String::new());
-    let (password, set_password) = create_signal(String::new());
-    let (error, set_error) = create_signal(Option::<String>::None);
+    let (username, set_username) = signal(String::new());
+    let (password, set_password) = signal(String::new());
+    let (error, set_error) = signal(Option::<String>::None);
     
     let login_action = create_server_action::<AdminLoginFn>();
     
-    create_effect(move |_| {
+    Effect::new(move |_| {
         if let Some(Ok(auth_response)) = login_action.value().get() {
             if let Ok(Some(storage)) = window().local_storage() {
                 let _ = storage.set_item("auth_token", &auth_response.token);
@@ -111,9 +112,9 @@ where
     F: Fn() -> View + 'static,
     C: Fn() -> View + 'static,
 {
-    let (is_authenticated, set_is_authenticated) = create_signal(false);
+    let (is_authenticated, set_is_authenticated) = signal(false);
     
-    create_effect(move |_| {
+    Effect::new(move |_| {
         if let Ok(Some(storage)) = window().local_storage() {
             if let Ok(Some(token)) = storage.get_item("auth_token") {
                 spawn_local(async move {
