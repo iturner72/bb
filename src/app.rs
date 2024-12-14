@@ -92,7 +92,7 @@ fn ProtectedAdminPanel() -> impl IntoView {
                         </p>
                         <A
                             href="/admin"
-                            class="text-seafoam-600 dark:text-seafoam-400 hover:underline"
+                            attr:class="text-seafoam-600 dark:text-seafoam-400 hover:underline"
                         >
                             "Go to Login"
                         </A>
@@ -108,7 +108,7 @@ fn ProtectedAdminPanel() -> impl IntoView {
                         <div class="flex items-center space-x-4">
                             <A
                                 href="/"
-                                class="text-teal-600 dark:text-aqua-400 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors duration-200"
+                                attr:class="text-teal-600 dark:text-aqua-400 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors duration-200"
                             >
                                 "home"
                             </A>
