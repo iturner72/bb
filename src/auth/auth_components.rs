@@ -1,21 +1,21 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use super::api::{AdminLoginFn, verify_token};
+use leptos_router::hooks::use_navigate;
+use leptos_router::NavigateOptions;
+use super::api::{AdminLoginFn, LogoutFn, verify_token};
 
 #[component]
 pub fn AdminLogin() -> impl IntoView {
     let (username, set_username) = signal(String::new());
     let (password, set_password) = signal(String::new());
     let (error, set_error) = signal(Option::<String>::None);
+    let navigate = use_navigate();
     
     let login_action = ServerAction::<AdminLoginFn>::new();
     
     Effect::new(move |_| {
-        if let Some(Ok(auth_response)) = login_action.value().get() {
-            if let Ok(Some(storage)) = window().local_storage() {
-                let _ = storage.set_item("auth_token", &auth_response.token);
-                let _ = window().location().set_href("/admin-panel");
-            }
+        if let Some(Ok(_)) = login_action.value().get() {
+            navigate("/admin-panel", NavigateOptions::default());
         } else if let Some(Err(e)) = login_action.value().get() {
             set_error.set(Some(e.to_string()));
         }
@@ -104,6 +104,30 @@ pub fn AdminLogin() -> impl IntoView {
 }
 
 #[component]
+pub fn LogoutButton() -> impl IntoView {
+    let navigate = use_navigate();
+
+    let logout_action = ServerAction::<LogoutFn>::new();
+
+    Effect::new(move |_| {
+        if logout_action.version().get() > 0 {
+            navigate("/admin", NavigateOptions::default());
+        }
+    });
+
+    view! {
+        <button
+            class="px-4 py-2 text-white bg-teal-500 rounded hover-bg-team-700"
+            on:click=move |_| {
+                logout_action.dispatch(LogoutFn {});
+            }
+        >
+            "Logout"
+        </button>
+    }
+}
+
+#[component]
 pub fn ProtectedRoute<F, C>(
     fallback: F,
     children: C,
@@ -113,22 +137,30 @@ where
     C: Fn() -> AnyView + Send + 'static,
 {
     let (is_authenticated, set_is_authenticated) = signal(false);
-    
-    Effect::new(move |_| {
-        if let Ok(Some(storage)) = window().local_storage() {
-            if let Ok(Some(token)) = storage.get_item("auth_token") {
-                spawn_local(async move {
-                    if let Ok(is_valid) = verify_token(token).await {
-                        set_is_authenticated.set(is_valid);
-                        if !is_valid {
-                            let _ = storage.remove_item("auth_token");
-                        }
-                    }
-                });
-            }
-        }
-    });
+    let navigate = use_navigate();
 
+    let check_auth = move || {
+        let navigate = navigate.clone();
+        spawn_local(async move {
+            match verify_token().await {
+                Ok(is_valid) => {
+                    set_is_authenticated.set(is_valid);
+                    if !is_valid {
+                        navigate("/admin", NavigateOptions::default());
+                    }
+                }
+                Err(_) => {
+                    set_is_authenticated.set(false);
+                    navigate("/admin", NavigateOptions::default());
+                }
+            }
+        });
+    };
+
+    check_auth();
+
+    Effect::new(move |_| check_auth());
+    
     view! {
         {move || {
             if is_authenticated.get() {

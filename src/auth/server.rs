@@ -1,6 +1,8 @@
 #[cfg(feature = "ssr")]
 pub mod jwt {
-    use super::super::types::{AuthError, AuthResponse};
+    use super::super::types::{AuthError, AuthResponse, AUTH_COOKIE_NAME};
+    use axum_extra::extract::cookie::{Cookie, SameSite};
+    use cookie::time;
     use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
     use serde::{Deserialize, Serialize};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -35,6 +37,16 @@ pub mod jwt {
         ).map_err(|e| AuthError::TokenCreation(e.to_string()))?;
 
         Ok(AuthResponse { token, expires_in })
+    }
+
+    pub fn create_auth_cookie(token: &str) -> Cookie<'static> {
+        Cookie::build((AUTH_COOKIE_NAME, token.to_owned()))
+            .path("/")
+            .secure(true)
+            .http_only(true)
+            .same_site(SameSite::Strict)
+            .expires(time::OffsetDateTime::now_utc() + time::Duration::hours(1))
+            .build()
     }
 
     pub fn verify_token(token: &str) -> Result<bool, AuthError> {

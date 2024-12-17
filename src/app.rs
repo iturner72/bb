@@ -2,14 +2,14 @@ use leptos::prelude::*;
 use leptos_meta::*;
 use leptos_router::{
     components::{FlatRoutes, Route, Router, A},
-    path,
+    path
 };
 
 use crate::components::poasts::Poasts;
 use crate::components::rss_test::RssTest;
 use crate::components::batch_processor::BatchProcessor;
 use crate::components::dark_mode_toggle::DarkModeToggle;
-use crate::auth::auth_components::{AdminLogin, ProtectedRoute};
+use crate::auth::auth_components::{AdminLogin, LogoutButton, ProtectedRoute};
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
     view! {
@@ -112,6 +112,7 @@ fn ProtectedAdminPanel() -> impl IntoView {
                             >
                                 "home"
                             </A>
+                            <LogoutButton/>
                             <DarkModeToggle/>
                         </div>
                     </div>

@@ -2,6 +2,8 @@ use std::fmt;
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 
+pub const AUTH_COOKIE_NAME: &str = "bb_auth";
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AuthResponse {
     pub token: String,
@@ -14,6 +16,7 @@ pub enum AuthError {
     TokenVerification(String),
     InvalidCredentials,
     MissingEnvironmentVar(String),
+    CookieError(String),
 }
 
 impl fmt::Display for AuthError {
@@ -23,6 +26,7 @@ impl fmt::Display for AuthError {
             AuthError::TokenVerification(e) => write!(f, "Failed to verify token: {}", e),
             AuthError::InvalidCredentials => write!(f, "Invalid username or password"),
             AuthError::MissingEnvironmentVar(var) => write!(f, "Missing environment variable: {}", var),
+            AuthError::CookieError(e) => write!(f, "Cookie error: {}", e),
         }
     }
 }
