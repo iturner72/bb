@@ -1,8 +1,13 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::use_navigate;
-use leptos_router::NavigateOptions;
+use leptos_router::{
+    components::A,
+    NavigateOptions
+};
+
 use super::api::{AdminLoginFn, LogoutFn, verify_token};
+use crate::components::dark_mode_toggle::DarkModeToggle;
 
 #[component]
 pub fn AdminLogin() -> impl IntoView {
@@ -111,19 +116,21 @@ pub fn LogoutButton() -> impl IntoView {
 
     Effect::new(move |_| {
         if logout_action.version().get() > 0 {
-            navigate("/admin", NavigateOptions::default());
+            navigate("/", NavigateOptions::default());
         }
     });
 
     view! {
         <button
-            class="px-4 py-2 text-white bg-teal-500 rounded hover-bg-team-700"
+            class="px-4 py-2 bg-seafoam-500 dark:bg-seafoam-600 text-mint-400 rounded 
+                   hover:bg-seafoam-400 dark:hover:bg-seafoam-500 transition-colors
+                   disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
             on:click=move |_| {
                 logout_action.dispatch(LogoutFn {});
             }
         >
-            "Logout"
-        </button>
+    "Logout"
+</button>
     }
 }
 
@@ -137,11 +144,13 @@ where
     C: Fn() -> AnyView + Send + 'static,
 {
     let (is_authenticated, set_is_authenticated) = signal(false);
+    let (is_checking, set_is_checking) = signal(true);
     let navigate = use_navigate();
 
     let check_auth = move || {
         let navigate = navigate.clone();
         spawn_local(async move {
+            set_is_checking.set(true);
             match verify_token().await {
                 Ok(is_valid) => {
                     set_is_authenticated.set(is_valid);
@@ -154,20 +163,42 @@ where
                     navigate("/admin", NavigateOptions::default());
                 }
             }
+            set_is_checking.set(false);
         });
     };
 
-    check_auth();
-
     Effect::new(move |_| check_auth());
-    
+
     view! {
-        {move || {
-            if is_authenticated.get() {
-                children()
-            } else {
-                fallback()
-            }
-        }}
+        <div class="w-full mx-auto bg-gray-100 dark:bg-teal-900 min-h-screen">
+            <div class="flex justify-between items-center p-4">
+                <h1 class="text-3xl text-left text-seafoam-600 dark:text-mint-400 font-bold">
+                    "admin panel"
+                </h1>
+                <div class="flex items-center space-x-4">
+                    <A
+                        href="/"
+                        attr:class="text-teal-600 dark:text-aqua-400 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors duration-200"
+                    >
+                        "home"
+                    </A>
+                    <LogoutButton/>
+                    <DarkModeToggle/>
+                </div>
+            </div>
+            {move || {
+                match (is_checking.get(), is_authenticated.get()) {
+                    (true, _) => view! {
+                        <div class="flex justify-center items-center h-[calc(100vh-5rem)]">
+                            <div class="animate-pulse text-seafoam-600 dark:text-aqua-400">
+                                "Verifying access..."
+                            </div>
+                        </div>
+                    }.into_any(),
+                    (false, true) => children(),
+                    (false, false) => fallback(),
+                }
+            }}
+        </div>
     }
 }

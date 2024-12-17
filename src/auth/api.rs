@@ -79,13 +79,14 @@ pub async fn verify_token() -> Result<bool, ServerFnError> {
     #[cfg(feature = "ssr")]
     {
         use super::server::jwt;
-        use super::types::{AuthError, AUTH_COOKIE_NAME};
+        use super::types:: AUTH_COOKIE_NAME;
         use leptos_axum::extract;
         use axum_extra::extract::cookie::CookieJar;
 
-        let cookie_jar = extract::<CookieJar>().await
-            .map_err(|e| AuthError::CookieError(e.to_string()))
-            .map_err(to_server_error)?;
+        let cookie_jar = match extract::<CookieJar>().await {
+            Ok(jar) => jar,
+            Err(_) => return Ok(false),
+        };
 
         match cookie_jar.get(AUTH_COOKIE_NAME) {
             Some(cookie) => jwt::verify_token(cookie.value()).map_err(to_server_error),
@@ -94,5 +95,5 @@ pub async fn verify_token() -> Result<bool, ServerFnError> {
     }
 
     #[cfg(not(feature = "ssr"))]
-    Err(ServerFnError::ServerError("Server-side function called on client".to_string()))
+    Ok(false)
 }
