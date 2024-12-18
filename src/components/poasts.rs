@@ -57,6 +57,7 @@ pub async fn get_poasts(search_term: Option<String>) -> Result<Vec<Poast>, Serve
         if let (Some(cached_poasts), last_fetch) = cached_data {
             if last_fetch.elapsed() < cache_duration {
                 info!("Returning cached poasts");
+                info!("Cache debug: {:?}", (cached_poasts.len(), last_fetch));
                 return Ok(cached_poasts);
             }
         }
@@ -125,7 +126,12 @@ pub fn Poasts() -> impl IntoView {
     let (search_input, set_search_input) = signal(String::new());
     
     let search_term = Memo::new(move |_| {
-        Some(search_input.get())
+        let input = search_input.get();
+        if input.is_empty() {
+            None
+        } else {
+            Some(input)
+        }
     });
     
     let poasts = Resource::new(
