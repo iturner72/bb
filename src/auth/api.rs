@@ -1,8 +1,7 @@
 use leptos::prelude::*;
-use super::types::AuthResponse;
 
 #[server(AdminLoginFn, "/api")]
-pub async fn admin_login(username: String, password: String) -> Result<AuthResponse, ServerFnError> {
+pub async fn admin_login(username: String, password: String) -> Result<(), ServerFnError> {
     use super::types::{AuthError, to_server_error};
     #[cfg(feature = "ssr")]
     {
@@ -33,7 +32,7 @@ pub async fn admin_login(username: String, password: String) -> Result<AuthRespo
 
         response_options.insert_header(HeaderName::from_static("set-cookie"), cookie_value);
 
-        Ok(auth_response)
+        Ok(())
     }
 
     #[cfg(not(feature = "ssr"))]
