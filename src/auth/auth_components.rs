@@ -6,7 +6,7 @@ use leptos_router::{
 };
 use cfg_if::cfg_if;
 
-use super::api::{AdminLoginFn, LogoutFn, verify_token};
+use super::api::{AdminLoginFn, LogoutFn};
 use crate::components::dark_mode_toggle::DarkModeToggle;
 
 #[component]
@@ -148,10 +148,11 @@ where
 {
     let (is_authenticated, set_is_authenticated) = signal(false);
     let (is_checking, set_is_checking) = signal(true);
-    let navigate = use_navigate();
     
     cfg_if! {
         if #[cfg(feature = "hydrate")] {
+        let navigate = use_navigate();
+        use super::api::verify_token;
             let location = location();
             let (attempted_path, set_attempted_path) = signal(String::new());
             
