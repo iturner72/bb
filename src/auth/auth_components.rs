@@ -1,10 +1,10 @@
 use leptos::prelude::*;
-use leptos::task::spawn_local;
 use leptos_router::hooks::use_navigate;
 use leptos_router::{
     components::A,
     NavigateOptions
 };
+use cfg_if::cfg_if;
 
 use super::api::{AdminLoginFn, LogoutFn, verify_token};
 use crate::components::dark_mode_toggle::DarkModeToggle;
@@ -20,7 +20,10 @@ pub fn AdminLogin() -> impl IntoView {
     
     Effect::new(move |_| {
         if let Some(Ok(_)) = login_action.value().get() {
-            navigate("/admin-panel", NavigateOptions::default());
+            navigate("/admin-panel", NavigateOptions {
+                replace: true,
+                ..NavigateOptions::default()
+            });
         } else if let Some(Err(e)) = login_action.value().get() {
             set_error.set(Some(e.to_string()));
         }
@@ -146,28 +149,63 @@ where
     let (is_authenticated, set_is_authenticated) = signal(false);
     let (is_checking, set_is_checking) = signal(true);
     let navigate = use_navigate();
+    
+    cfg_if! {
+        if #[cfg(feature = "hydrate")] {
+            let location = location();
+            let (attempted_path, set_attempted_path) = signal(String::new());
+            
+            Effect::new(move |_| {
+                if let Ok(path) = location.pathname() {
+                    set_attempted_path.set(path);
+                }
+            });
 
-    let check_auth = move || {
-        let navigate = navigate.clone();
-        spawn_local(async move {
-            set_is_checking.set(true);
-            match verify_token().await {
-                Ok(is_valid) => {
-                    set_is_authenticated.set(is_valid);
-                    if !is_valid {
-                        navigate("/admin", NavigateOptions::default());
+            let check_auth = Action::new(move |_: &()| {
+                let navigate = navigate.clone();
+                let attempted = attempted_path.get();
+                async move {
+                    set_is_checking.set(true);
+                    match verify_token().await {
+                        Ok(is_valid) => {
+                            set_is_authenticated.set(is_valid);
+                            if !is_valid && attempted == "/admin-panel" {
+                                navigate("/admin", NavigateOptions {
+                                    replace: true,
+                                    ..NavigateOptions::default()
+                                });
+                            }
+                        }
+                        Err(_) => {
+                            set_is_authenticated.set(false);
+                            if attempted == "/admin-panel" {
+                                navigate("/admin", NavigateOptions {
+                                    replace: true,
+                                    ..NavigateOptions::default()
+                                });
+                            }
+                        }
                     }
+                    set_is_checking.set(false);
                 }
-                Err(_) => {
-                    set_is_authenticated.set(false);
-                    navigate("/admin", NavigateOptions::default());
-                }
-            }
-            set_is_checking.set(false);
-        });
-    };
+            });
 
-    Effect::new(move |_| check_auth());
+            Effect::new(move |_| {
+                check_auth.dispatch(());
+            });
+        } else {
+            let check_auth = Action::new(move |_: &()| {
+                async move {
+                    set_is_checking.set(false);
+                    set_is_authenticated.set(false);
+                }
+            });
+
+            Effect::new(move |_| {
+                check_auth.dispatch(());
+            });
+        }
+    }
 
     view! {
         <div class="w-full mx-auto bg-gray-100 dark:bg-teal-900 min-h-screen">
@@ -202,3 +240,4 @@ where
         </div>
     }
 }
+
