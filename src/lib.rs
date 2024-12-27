@@ -5,6 +5,7 @@ pub mod supabase;
 pub mod components;
 pub mod rss_service;
 pub mod backfill_service;
+pub mod summary_refresh_service;
 pub mod auth;
 pub mod server_fn;
 
