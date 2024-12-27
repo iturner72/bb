@@ -8,6 +8,7 @@ use leptos_router::{
 use crate::components::poasts::Poasts;
 use crate::components::rss_test::RssTest;
 use crate::components::batch_processor::BatchProcessor;
+use crate::components::summary_refresh_processor::SummaryRefreshProcessor;
 use crate::components::dark_mode_toggle::DarkModeToggle;
 use crate::auth::auth_components::{AdminLogin, ProtectedRoute};
 
@@ -112,6 +113,12 @@ fn ProtectedAdminPanel() -> impl IntoView {
                             "Backfill Missing Data"
                         </h2>
                         <BatchProcessor/>
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
+                            "Refresh Summaries"
+                        </h2>
+                        <SummaryRefreshProcessor/>
                     </div>
                 </div>
             }.into_any()

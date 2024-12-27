@@ -1,4 +1,5 @@
 use bb::backfill_service;
+use bb::summary_refresh_service;
 use cfg_if::cfg_if;
 
 cfg_if! {
@@ -66,6 +67,18 @@ cfg_if! {
             Sse::new(SseStream { receiver: rx })
         }
 
+        async fn refresh_summaries_handler() -> Sse<SseStream> {
+            let (tx, rx) = tokio_mpsc::channel(100);
+
+            tokio::spawn(async move {
+                if let Err(e) = summary_refresh_service::refresh::refresh_summaries(tx).await {
+                    log::error!("Error refreshing summaries: {}", e);
+                }
+            });
+
+            Sse::new(SseStream { receiver: rx})
+        }
+
         #[tokio::main]
         async fn main() {
             dotenv().ok();
@@ -107,6 +120,7 @@ cfg_if! {
                 )
                 .route("/api/rss-progress", get(rss_progress_handler))
                 .route("/api/backfill-progress", get(backfill_progress_handler))
+                .route("/api/refresh-summaries", get(refresh_summaries_handler))
                 .leptos_routes_with_handler(routes, get(|State(app_state): State<AppState>, request: Request<AxumBody>| async move {
                     let handler = leptos_axum::render_app_to_stream_with_context(
                         move || {
