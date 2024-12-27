@@ -245,8 +245,8 @@ pub mod server {
 
         let user_message = ChatCompletionRequestUserMessage {
             content: format!(
-                "Create a one-line description for a technical blog post based on the title and full text I provide you. \
-                Also, give me a list of the top 5 most important buzzwords from the same. \
+                "Create a detailed technical summary for a blog post based on the title and full text I provide you. \
+                Include key technical details, architectures discussed, and main takeaways. \
                 Respond only in JSON, using 'summary' and 'buzzwords' as the keys.\n\n\
                 Title: '{}'\n\nFull Text: '{}'",
                 title, full_text
@@ -255,13 +255,13 @@ pub mod server {
         };
 
         let request = CreateChatCompletionRequest {
-            model: "gpt-3.5-turbo-0125".to_string(),
+            model: "gpt-4o-mini".to_string(),
             messages: vec![
                 system_message.into(),
                 user_message.into(),
             ],
             response_format: Some(ResponseFormat::JsonObject),
-            max_tokens: Some(200),
+            max_tokens: Some(600),
             ..Default::default()
         };
 
