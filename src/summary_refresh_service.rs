@@ -55,7 +55,7 @@ pub mod refresh {
             &response.text().await.map_err(|e| RefreshError::Supabase(e.to_string()))?
         )?;
 
-        info!("Found {} posts to regresh", posts.len());
+        info!("Found {} posts to refresh", posts.len());
 
         for (index, post) in posts.iter().enumerate() {
             let title = post["title"].as_str().unwrap_or("").to_string();

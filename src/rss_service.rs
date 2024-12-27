@@ -239,15 +239,17 @@ pub mod server {
         full_text: &str,
     ) -> Result<PostInsights, InsightError> {
         let system_message = ChatCompletionRequestSystemMessage {
-            content: "You are a helpful assistant.".into(),
+            content: "You are a helpful assistant that creates detailed technical summaries.".into(),
             name: None,
         };
 
         let user_message = ChatCompletionRequestUserMessage {
             content: format!(
                 "Create a detailed technical summary for a blog post based on the title and full text I provide you. \
-                Include key technical details, architectures discussed, and main takeaways. \
-                Respond only in JSON, using 'summary' and 'buzzwords' as the keys.\n\n\
+                Include key technical details, architectures discussed, guests featured (if applicable), and main takeaways. \
+                Respond only in JSON with exactly two fields:\n\
+                1. 'summary': A single string containing a comprehensive summary\n\
+                2. 'buzzwords': An array of 5 key technical terms or concepts\n\n\
                 Title: '{}'\n\nFull Text: '{}'",
                 title, full_text
             ).into(),
@@ -270,9 +272,16 @@ pub mod server {
             .map_err(|e| InsightError::OpenAI(e.to_string()))?;
 
         let content = response.choices[0].message.content.clone().unwrap_or_default();
-        
-        let insights: PostInsights = serde_json::from_str(&content)?;
-        Ok(insights)
+
+        log::info!("Raw OpenAI response for '{}': {}", title, content);
+
+        match serde_json::from_str::<PostInsights>(&content) {
+            Ok(insights) => Ok(insights),
+            Err(e) => {
+                log::error!("Failed to parse JSON for '{}': {}\nRaw content: {}", title, e, content);
+                Err(InsightError::Json(e))
+            }
+        }
     }
 }
 
