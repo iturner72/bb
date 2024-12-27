@@ -17,3 +17,6 @@ playwright/.cache/
 
 # shh
 .env
+
+# macs amirite
+.DS_Store
