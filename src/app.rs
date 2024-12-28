@@ -52,9 +52,9 @@ fn HomePage() -> impl IntoView {
     view! {
         <div class="w-full mx-auto pl-2 bg-gray-100 dark:bg-teal-900">
             <div class="flex justify-between items-center">
-                <h1 class="text-3xl text-left text-seafoam-600 dark:text-mint-400 ib pl-4 p-4 font-bold">
+                <a href="/" class="text-3xl text-left text-seafoam-600 dark:text-mint-400 ib pl-4 p-4 font-bold">
                     "bryptoblogs"
-                </h1>
+                </a>
                 <div class="items-end pr-4 flex space-x-4">
                     <a 
                         href="/admin-panel"

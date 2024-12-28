@@ -249,21 +249,23 @@ pub fn BlogPoast(
 ) -> impl IntoView {
     let company = Memo::new(move |_| poast.company.clone());
     let (is_expanded, set_is_expanded) = signal(false);
-
+    
     let handle_show_more = move |ev: web_sys::MouseEvent| {
         ev.stop_propagation();
+        ev.prevent_default();
         set_is_expanded.update(|expanded| *expanded = !*expanded);
     };
     
     view! {
         <div class="relative p-4">
-            <a 
-                href={poast.link.clone()}
-                class="block"
-                target="_blank"
-                rel="noopener noreferrer"
-            >
-                <article class="base-poast flex flex-col items-start cursor-pointer h-full w-full bg-white dark:bg-teal-800 border-2 border-gray-200 dark:border-teal-700 hover:border-seafoam-500 dark:hover:border-aqua-500 p-4 rounded-lg shadow-md hover:shadow-lg transition-all">
+            <article class="base-poast flex flex-col items-start h-full w-full bg-white dark:bg-teal-800 border-2 border-gray-200 dark:border-teal-700 hover:border-seafoam-500 dark:hover:border-aqua-500 p-4 rounded-lg shadow-md hover:shadow-lg transition-all">
+                {/* Clickable header section */}
+                <a 
+                    href={poast.link.clone()}
+                    class="block w-full"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
                     <div class="flex items-center pb-2 max-w-1/2">
                         {move || {
                             let company_val = company.get();
@@ -291,35 +293,36 @@ pub fn BlogPoast(
                             {poast.published_at.clone()}
                         </p>
                     </div>
-                    <div class="poast-summary mt-2 w-full">
-                        {move || poast.summary.clone().map(|summary| view! {
-                            <div>
-                                <HighlightedText
-                                    text=Cow::from(summary)
-                                    search_term=search_term.clone()
-                                    class={
-                                        if is_expanded() {
-                                            "text-xs md:text-sm lg:text-base text-gray-600 dark:text-gray-300"
-                                        } else {
-                                            "text-xs md:text-sm lg:text-base text-gray-600 dark:text-gray-300 line-clamp-2 md:line-clamp-3 lg:line-clamp-4"
-                                        }
-                                    }
-                                />
-                                <button
-                                    on:click=handle_show_more
-                                    class="mt-2 text-xs md:text-sm text-seafoam-600 dark:text-aqua-400 hover:text-seafoam-700 dark:hover:text-aqua-300 transition-colors"
-                                >
-                                    {move || if is_expanded() {
-                                        "Show Less"
+                </a>
+                {/* Non-clickable summary section */}
+                <div class="poast-summary mt-2 w-full">
+                    {move || poast.summary.clone().map(|summary| view! {
+                        <div>
+                            <HighlightedText
+                                text=Cow::from(summary)
+                                search_term=search_term.clone()
+                                class={
+                                    if is_expanded() {
+                                        "text-xs md:text-sm lg:text-base text-gray-600 dark:text-gray-300"
                                     } else {
-                                        "Show More"
-                                    }}
-                                </button>
-                            </div>
-                        })}
-                    </div>
-                </article>
-            </a>
+                                        "text-xs md:text-sm lg:text-base text-gray-600 dark:text-gray-300 line-clamp-2 md:line-clamp-3 lg:line-clamp-4"
+                                    }
+                                }
+                            />
+                            <button
+                                on:click=handle_show_more
+                                class="mt-2 text-xs md:text-sm text-seafoam-600 dark:text-aqua-400 hover:text-seafoam-700 dark:hover:text-aqua-300 transition-colors"
+                            >
+                                {move || if is_expanded() {
+                                    "Show Less"
+                                } else {
+                                    "Show More"
+                                }}
+                            </button>
+                        </div>
+                    })}
+                </div>
+            </article>
         </div>
     }
 }
