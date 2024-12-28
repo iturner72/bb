@@ -37,16 +37,22 @@ pub mod refresh {
     }
 
     pub async fn refresh_summaries(
-        progress_sender: tokio::sync::mpsc::Sender<Result<Event, Infallible>>
+        progress_sender: tokio::sync::mpsc::Sender<Result<Event, Infallible>>,
+        company: Option<String>
     ) -> Result<(), RefreshError> {
         info!("Starting summary refresh process");
         let supabase = crate::supabase::get_client();
         let openai = Client::with_config(OpenAIConfig::default());
         let mut company_states: HashMap<String, RssProgressUpdate> = HashMap::new();
 
-        let response = supabase
-            .from("poasts")
-            .select("*")
+        let mut request = supabase.from("poasts").select("*");
+
+        if let Some(company_name) = &company {
+            info!("Filtering for company: {}", company_name);
+            request = request.eq("company", company_name);
+        }
+
+        let response = request
             .execute()
             .await
             .map_err(|e| RefreshError::Supabase(e.to_string()))?;

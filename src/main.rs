@@ -67,11 +67,15 @@ cfg_if! {
             Sse::new(SseStream { receiver: rx })
         }
 
-        async fn refresh_summaries_handler() -> Sse<SseStream> {
+        async fn refresh_summaries_handler(
+            Query(params): Query<HashMap<String, String>>,
+        ) -> Sse<SseStream> {
             let (tx, rx) = tokio_mpsc::channel(100);
 
+            let company = params.get("company").cloned();
+
             tokio::spawn(async move {
-                if let Err(e) = summary_refresh_service::refresh::refresh_summaries(tx).await {
+                if let Err(e) = summary_refresh_service::refresh::refresh_summaries(tx, company).await {
                     log::error!("Error refreshing summaries: {}", e);
                 }
             });

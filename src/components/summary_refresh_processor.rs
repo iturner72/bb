@@ -3,19 +3,72 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use web_sys::{EventSource, MessageEvent, ErrorEvent};
 use std::collections::HashMap;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 use crate::server_fn::RssProgressUpdate;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CompanyLink {
+    pub company: String,
+    pub link: String,
+    pub last_processed: Option<DateTime<Utc>>,
+}
+
+#[server(GetCompanyLinks, "/api")]
+pub async fn get_company_links() -> Result<Vec<CompanyLink>, ServerFnError> {
+    use crate::supabase::get_client;
+
+    let client = get_client();
+
+    let response = client
+        .from("links")
+        .select("company, link, last_processed")
+        .execute()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let text = response.text()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    serde_json::from_str(&text)
+        .map_err(|e| ServerFnError::ServerError(e.to_string()))
+}
 
 #[component]
 pub fn SummaryRefreshProcessor() -> impl IntoView {
     let (progress_states, set_progress_states) = signal::<HashMap<String, RssProgressUpdate>>(HashMap::new());
     let (is_processing, set_is_processing) = signal(false);
+    let (selected_company, set_selected_company) = signal::<Option<String>>(None);
+
+    let companies = Resource::new(
+        || (),
+        |_| async move {
+            get_company_links()
+                .await
+                .map(|links| {
+                    let mut companies: Vec<String> = links
+                        .into_iter()
+                        .map(|link| link.company)
+                        .collect();
+                    companies.sort();
+                    companies
+                })
+        }
+    );
 
     let start_refresh = move || {
         set_is_processing(true);
         set_progress_states.update(|states| states.clear());
 
-        let event_source = EventSource::new("/api/refresh-summaries")
+        let company = selected_company.get();
+        let url = match company {
+            Some(c) => format!("/api/refresh-summaries?company={}", urlencoding::encode(&c)),
+            None => "/api/refresh-summaries".to_string(),
+        };
+
+        let event_source = EventSource::new(&url)
             .expect("Failed to connect to SSE endpoint");
 
         let event_source_clone = event_source.clone();
@@ -55,7 +108,41 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
 
     view! {
         <div class="p-4 space-y-4">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="w-64">
+                    <select
+                        class="w-full p-2 rounded-md bg-gray-100 dark:bg-teal-800 
+                               text-gray-800 dark:text-gray-200 
+                               border border-teal-500 dark:border-seafoam-500
+                               focus:border-seafoam-600 dark:focus:border-aqua-400
+                               focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400"
+                        on:change=move |ev| {
+                            let value = event_target_value(&ev);
+                            set_selected_company(if value.is_empty() { None } else { Some(value) });
+                        }
+                    >
+                        <option value="">"All Companies"</option>
+                        <Suspense>
+                            {move || {
+                                companies.get().map(|result| {
+                                    match result {
+                                        Ok(companies) => companies.into_iter().map(|company| {
+                                            view! {
+                                                <option value={company.clone()}>{company.clone()}</option>
+                                            }.into_any()
+                                        }).collect_view(),
+                                        Err(_) => vec![
+                                            view! { 
+                                                <option>"Error loading companies"</option> 
+                                            }.into_any()
+                                        ].collect_view(),
+                                    }
+                                })
+                            }}
+                        </Suspense>
+                    </select>
+                </div>
+
                 <button
                     class="px-4 py-2 bg-seafoam-500 dark:bg-seafoam-600 text-white rounded 
                            hover:bg-seafoam-400 dark:hover:bg-seafoam-500 transition-colors
@@ -63,7 +150,7 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
                     on:click=move |_| start_refresh()
                     disabled=is_processing
                 >
-                    {move || if is_processing() { "Processing..." } else { "Refresh All Summaries" }}
+                    {move || if is_processing() { "Processing..." } else { "Refresh Summaries" }}
                 </button>
                 
                 {move || is_processing().then(|| view! {
