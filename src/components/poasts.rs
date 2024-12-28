@@ -248,6 +248,12 @@ pub fn BlogPoast(
     #[prop(into, optional)] search_term: String,
 ) -> impl IntoView {
     let company = Memo::new(move |_| poast.company.clone());
+    let (is_expanded, set_is_expanded) = signal(false);
+
+    let handle_show_more = move |ev: web_sys::MouseEvent| {
+        ev.stop_propagation();
+        set_is_expanded.update(|expanded| *expanded = !*expanded);
+    };
     
     view! {
         <div class="relative p-4">
@@ -287,11 +293,29 @@ pub fn BlogPoast(
                     </div>
                     <div class="poast-summary mt-2 w-full">
                         {move || poast.summary.clone().map(|summary| view! {
-                            <HighlightedText
-                                text=Cow::from(summary)
-                                search_term=search_term.clone()
-                                class="text-xs md:text-sm lg:text-base text-gray-600 dark:text-gray-300 line-clamp-2 md:line-clamp-3 lg:line-clamp-4"
-                            />
+                            <div>
+                                <HighlightedText
+                                    text=Cow::from(summary)
+                                    search_term=search_term.clone()
+                                    class={
+                                        if is_expanded() {
+                                            "text-xs md:text-sm lg:text-base text-gray-600 dark:text-gray-300"
+                                        } else {
+                                            "text-xs md:text-sm lg:text-base text-gray-600 dark:text-gray-300 line-clamp-2 md:line-clamp-3 lg:line-clamp-4"
+                                        }
+                                    }
+                                />
+                                <button
+                                    on:click=handle_show_more
+                                    class="mt-2 text-xs md:text-sm text-seafoam-600 dark:text-aqua-400 hover:text-seafoam-700 dark:hover:text-aqua-300 transition-colors"
+                                >
+                                    {move || if is_expanded() {
+                                        "Show Less"
+                                    } else {
+                                        "Show More"
+                                    }}
+                                </button>
+                            </div>
                         })}
                     </div>
                 </article>
