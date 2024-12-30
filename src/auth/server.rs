@@ -97,6 +97,39 @@ impl crate::auth::api::VerifyTokenFn {
     }
 }
 
+#[cfg(feature = "ssr")]
+pub mod middleware {
+    use axum::{
+        body::Body,
+        http::Request,
+        middleware::Next,
+        response::Response,
+        http::StatusCode,
+    };
+    use axum_extra::extract::cookie::CookieJar;
+    use super::super::types::AUTH_COOKIE_NAME;
+    use super::jwt;
+
+    pub async fn require_auth(
+        cookie_jar: CookieJar,
+        request: Request<Body>,
+        next: Next,
+    ) -> Result<Response, StatusCode> {
+        let token = cookie_jar
+            .get(AUTH_COOKIE_NAME)
+            .map(|cookie| cookie.value().to_string())
+            .ok_or(StatusCode::UNAUTHORIZED)?;
+
+        match jwt::verify_token(&token) {
+            Ok(true) => {
+                let response = next.run(request).await;
+                Ok(response)
+            },
+            _ => Err(StatusCode::UNAUTHORIZED),
+        }
+    }
+}
+
 #[cfg(all(test, feature = "ssr"))]
 mod tests {
     use super::*;

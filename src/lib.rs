@@ -8,6 +8,7 @@ pub mod backfill_service;
 pub mod summary_refresh_service;
 pub mod auth;
 pub mod server_fn;
+pub mod handlers;
 
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]

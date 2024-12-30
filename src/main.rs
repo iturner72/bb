@@ -1,87 +1,24 @@
-use bb::backfill_service;
-use bb::summary_refresh_service;
 use cfg_if::cfg_if;
 
 cfg_if! {
     if #[cfg(feature = "ssr")] {
         use axum::{
             body::Body as AxumBody,
-            extract::{Query, State},
+            extract::State,
             http::Request,
             response::IntoResponse,
-            response::sse::{Event, Sse},
             routing::get,
+            middleware,
             Router,
         };
-        use futures::stream::Stream;
-        use tokio::sync::mpsc as tokio_mpsc;
-        use std::convert::Infallible;
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-        use std::collections::HashMap;
         use dotenv::dotenv;
         use env_logger::Env;
         use leptos::prelude::*;
         use leptos_axum::{generate_route_list, handle_server_fns_with_context, LeptosRoutes};
         use bb::app::*;
-        use bb::rss_service::server::process_feeds_with_progress;
+        use bb::auth::server::middleware::require_auth;
         use bb::state::AppState;
-
-        pub struct SseStream {
-            pub receiver: tokio_mpsc::Receiver<Result<Event, Infallible>>,
-        }
-
-        impl Stream for SseStream {
-            type Item = Result<Event, Infallible>;
-
-            fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-                self.receiver.poll_recv(cx)
-            }
-        }
-
-        async fn rss_progress_handler(
-            Query(_params): Query<HashMap<String, String>>,
-        ) -> Sse<SseStream> {
-            let (tx, rx) = tokio_mpsc::channel(100);
-
-            tokio::spawn(async move {
-                if let Err(e) = process_feeds_with_progress(tx).await {
-                    log::error!("Error processing feeds: {}", e);
-                }
-            });
-
-            Sse::new(SseStream { receiver: rx })
-        }
-
-        async fn backfill_progress_handler(
-            Query(_params): Query<HashMap<String, String>>,
-        ) -> Sse<SseStream> {
-            let (tx, rx) = tokio_mpsc::channel(100);
-
-            tokio::spawn(async move {
-                if let Err(e) = backfill_service::backfill::backfill_missing_data(tx).await {
-                    log::error!("Error during backfill: {}", e);
-                }
-            });
-
-            Sse::new(SseStream { receiver: rx })
-        }
-
-        async fn refresh_summaries_handler(
-            Query(params): Query<HashMap<String, String>>,
-        ) -> Sse<SseStream> {
-            let (tx, rx) = tokio_mpsc::channel(100);
-
-            let company = params.get("company").cloned();
-
-            tokio::spawn(async move {
-                if let Err(e) = summary_refresh_service::refresh::refresh_summaries(tx, company).await {
-                    log::error!("Error refreshing summaries: {}", e);
-                }
-            });
-
-            Sse::new(SseStream { receiver: rx})
-        }
+        use bb::handlers::*;
 
         #[tokio::main]
         async fn main() {
@@ -117,14 +54,18 @@ cfg_if! {
                 .await
             }
 
+            let protected_routes = Router::new()
+                .route("/api/rss-progress", get(rss_progress_handler))
+                .route("/api/backfill-progress", get(backfill_progress_handler))
+                .route("/api/refresh-summaries", get(refresh_summaries_handler))
+                .layer(middleware::from_fn(require_auth));
+
             let app = Router::new()
                 .route(
                     "/api/*fn_name",
                     get(server_fn_handler).post(server_fn_handler),
                 )
-                .route("/api/rss-progress", get(rss_progress_handler))
-                .route("/api/backfill-progress", get(backfill_progress_handler))
-                .route("/api/refresh-summaries", get(refresh_summaries_handler))
+                .merge(protected_routes)
                 .leptos_routes_with_handler(routes, get(|State(app_state): State<AppState>, request: Request<AxumBody>| async move {
                     let handler = leptos_axum::render_app_to_stream_with_context(
                         move || {

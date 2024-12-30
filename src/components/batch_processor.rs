@@ -48,6 +48,15 @@ pub fn BatchProcessor() -> impl IntoView {
 
         let on_error = Closure::wrap(Box::new(move |error: ErrorEvent| {
             log::error!("SSE Error: {:?}", error);
+            if let Some(es) = error.target()
+                .and_then(|t| t.dyn_into::<web_sys::EventSource>().ok()) 
+            {
+                if es.ready_state() == web_sys::EventSource::CLOSED {
+                    if let Some(window) = web_sys::window() {
+                        let _ = window.location().set_href("/admin");
+                    }
+                }
+            }
             event_source_error.close();
         }) as Box<dyn FnMut(_)>);
 
