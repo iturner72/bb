@@ -3,7 +3,7 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use web_sys::{EventSource, MessageEvent, ErrorEvent};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, Datelike};
 use serde::{Deserialize, Serialize};
 
 use crate::server_fn::RssProgressUpdate;
@@ -42,6 +42,12 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
     let (is_processing, set_is_processing) = signal(false);
     let (selected_company, set_selected_company) = signal::<Option<String>>(None);
 
+    let current_year = chrono::Local::now().year();
+    let (start_year, set_start_year) = signal(Option::<i32>::None);
+    let (end_year, set_end_year) = signal(Option::<i32>::None);
+
+    let year_options = (2020..=current_year).rev().collect::<Vec<i32>>();
+
     let companies = Resource::new(
         || (),
         |_| async move {
@@ -63,9 +69,25 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
         set_progress_states.update(|states| states.clear());
 
         let company = selected_company.get();
-        let url = match company {
-            Some(c) => format!("/api/refresh-summaries?company={}", urlencoding::encode(&c)),
-            None => "/api/refresh-summaries".to_string(),
+
+        let mut url_parts = Vec::new();
+
+        if let Some(c) = company {
+            url_parts.push(format!("company={}", urlencoding::encode(&c)));
+        }
+
+        if let Some(start) = start_year.get() {
+            url_parts.push(format!("start_year={}", start));
+        }
+
+        if let Some(end) = end_year.get() {
+            url_parts.push(format!("end_year={}", end));
+        }
+
+        let url = if url_parts.is_empty() {
+            "api/refresh-summaries".to_string()
+        } else {
+            format!("/api/refresh-summaries?{}", url_parts.join("&"))
         };
 
         let event_source = EventSource::new(&url)
@@ -149,6 +171,73 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
                                 })
                             }}
                         </Suspense>
+                    </select>
+                </div>
+
+                // Year Range Selection
+                <div class="w-full sm:w-40">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        "Start Year"
+                    </label>
+                    <select
+                        class="w-full p-2 rounded-md bg-gray-100 dark:bg-teal-800 
+                               text-gray-800 dark:text-gray-200 
+                               border border-teal-500 dark:border-seafoam-500
+                               focus:border-seafoam-600 dark:focus:border-aqua-400
+                               focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400"
+                        prop:value=move || start_year.get().map(|y| y.to_string()).unwrap_or_default()
+                        on:change=move |ev| {
+                            let value = event_target_value(&ev);
+                            if value.is_empty() {
+                                set_start_year(None);
+                            } else if let Ok(year) = value.parse::<i32>() {
+                                set_start_year(Some(year));
+                                if let Some(end_y) = end_year.get() {
+                                    if year > end_y {
+                                        set_end_year(Some(year));
+                                    }
+                                }
+                            }
+                        }
+                    >
+                        {year_options.clone().into_iter().map(|year| {
+                            view! {
+                                <option value={year.to_string()}>{year.to_string()}</option>
+                            }
+                        }).collect_view()}
+                    </select>
+                </div>
+
+                <div class="w-full sm:w-40">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        "End Year"
+                    </label>
+                    <select
+                        class="w-full p-2 rounded-md bg-gray-100 dark:bg-teal-800 
+                               text-gray-800 dark:text-gray-200 
+                               border border-teal-500 dark:border-seafoam-500
+                               focus:border-seafoam-600 dark:focus:border-aqua-400
+                               focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400"
+                        prop:value=move || end_year.get().map(|y| y.to_string()).unwrap_or_default()
+                        on:change=move |ev| {
+                            let value = event_target_value(&ev);
+                            if value.is_empty() {
+                                set_end_year(None);
+                            } else if let Ok(year) = value.parse::<i32>() {
+                                set_end_year(Some(year));
+                                if let Some(start_y) = start_year.get() {
+                                    if year < start_y {
+                                        set_start_year(Some(year));
+                                    }
+                                }
+                            }
+                        }
+                    >
+                        {year_options.into_iter().map(|year| {
+                            view! {
+                                <option value={year.to_string()}>{year.to_string()}</option>
+                            }
+                        }).collect_view()}
                     </select>
                 </div>
 

@@ -55,9 +55,20 @@ pub async fn refresh_summaries_handler(
     let (tx, rx) = tokio_mpsc::channel(100);
 
     let company = params.get("company").cloned();
+    let start_year = params
+        .get("start_year")
+        .and_then(|y| y.parse::<i32>().ok());
+    let end_year = params
+        .get("end_year")
+        .and_then(|y| y.parse::<i32>().ok());
 
     tokio::spawn(async move {
-        if let Err(e) = crate::summary_refresh_service::refresh::refresh_summaries(tx, company).await {
+        if let Err(e) = crate::summary_refresh_service::refresh::refresh_summaries(
+            tx,
+            company,
+            start_year,
+            end_year
+        ).await {
             log::error!("Error refreshing summaries: {}", e);
         }
     });

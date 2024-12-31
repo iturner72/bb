@@ -38,14 +38,33 @@ pub mod refresh {
 
     pub async fn refresh_summaries(
         progress_sender: tokio::sync::mpsc::Sender<Result<Event, Infallible>>,
-        company: Option<String>
+        company: Option<String>,
+        start_year: Option<i32>,
+        end_year: Option<i32>,
     ) -> Result<(), RefreshError> {
-        info!("Starting summary refresh process");
+        let date_range_str = match (start_year, end_year) {
+            (Some(start), Some(end)) => format!("years {} to {}", start, end),
+            (Some(start), None) => format!("year {} onwards", start),
+            (None, Some(end)) => format!("years up to {}", end),
+            (None, None) => "all years".to_string(),
+        };
+        info!("Starting summary refresh process for {}", date_range_str);
+
         let supabase = crate::supabase::get_client();
         let openai = Client::with_config(OpenAIConfig::default());
         let mut company_states: HashMap<String, RssProgressUpdate> = HashMap::new();
 
         let mut request = supabase.from("poasts").select("*");
+
+        if let Some(start) = start_year {
+            let start_date = format!("{}-01-01", start);
+            request = request.gte("published_at", start_date);
+        }
+
+        if let Some(end) = end_year {
+            let end_date = format!("{}-12-31", end);
+            request = request.lte("published_at", end_date);
+        }
 
         if let Some(company_name) = &company {
             info!("Filtering for company: {}", company_name);
@@ -66,9 +85,13 @@ pub mod refresh {
         for (index, post) in posts.iter().enumerate() {
             let title = post["title"].as_str().unwrap_or("").to_string();
             let company = post["company"].as_str().unwrap_or("").to_string();
+            let published_at = post["published_at"].as_str().unwrap_or("").to_string();
             let full_text = post["full_text"].as_str().unwrap_or("").to_string();
 
-            info!("Processing post {}/{}: '{}' from {}", index + 1, posts.len(), title, company);
+            info!(
+                "Processing post {}/{}: '{}' from {} (published: {})",
+                index + 1, posts.len(), title, company, published_at
+            );
 
             let company_progress = company_states.entry(company.clone()).or_insert(RssProgressUpdate {
                 company: company.clone(),
@@ -78,7 +101,7 @@ pub mod refresh {
                 current_post: Some(title.clone()),
             });
 
-            company_progress.current_post = Some(title.clone());
+            company_progress.current_post = Some(format!("{} ({})", title, published_at));
             progress_sender.send(company_progress.clone().into_event())
                 .await
                 .map_err(|e| RefreshError::Send(e.to_string()))?;
@@ -88,6 +111,11 @@ pub mod refresh {
                 .map_err(|e| RefreshError::OpenAI(e.to_string()))
             {
                 Ok(insights) => {
+                    company_progress.status = "updating".to_string();
+                    progress_sender.send(company_progress.clone().into_event())
+                        .await
+                        .map_err(|e| RefreshError::Send(e.to_string()))?;
+
                     let update = SummaryUpdate {
                         summary: insights.summary,
                         buzzwords: insights.buzzwords,
@@ -97,12 +125,14 @@ pub mod refresh {
                         .from("poasts")
                         .update(&serde_json::to_string(&update)?)
                         .eq("title", &title)
+                        .eq("company", &company)
                         .execute()
                         .await
                     {
                         Ok(_) => {
                             company_progress.new_posts += 1;
                             company_progress.status = "completed".to_string();
+                            info!("Successfully updated post '{}' from {}", title, company);
                         }
                         Err(e) => {
                             error!("Failed to update post '{}': {}", title, e);
@@ -127,6 +157,14 @@ pub mod refresh {
 
             // rate limiting delay
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        }
+
+        for (_, progress) in company_states.iter_mut() {
+            progress.status = "completed".to_string();
+            progress.current_post = None;
+            progress_sender.send(progress.clone().into_event())
+                .await
+                .map_err(|e| RefreshError::Send(e.to_string()))?;
         }
 
         progress_sender
