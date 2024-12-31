@@ -95,9 +95,14 @@ fn YearSelector(
     label: &'static str,
     #[prop(into)] value: Signal<Option<i32>>,
     #[prop(into)] set_value: WriteSignal<Option<i32>>,
-    #[prop(into)] years: Vec<i32>,
+    #[prop(into)] min_year: Signal<i32>,
+    #[prop(into)] max_year: Signal<i32>,
     #[prop(optional)] allow_empty: bool,
-) -> impl IntoView{
+) -> impl IntoView {
+    let years = move || {
+        (min_year.get()..=max_year.get()).rev().collect::<Vec<_>>()
+    };
+
     view! {
         <div class="w-full sm:w-40">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -122,7 +127,7 @@ fn YearSelector(
                 {allow_empty.then(|| view! {
                     <option value="">"All Years"</option>
                 })}
-                {years.into_iter().map(|year| {
+                {move || years().into_iter().map(|year| {
                     view! {
                         <option value={year.to_string()}>{year.to_string()}</option>
                     }
@@ -141,24 +146,23 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
     let (end_year, set_end_year) = signal(Option::<i32>::None);
 
     let year_range = Resource::new(
-        move || selected_company.get(),
-        |company| async move {
-            get_year_range(company).await
-        }
+        selected_company,
+        |company| async move { get_year_range(company).await }
     );
 
-    let year_options = move || {
-        year_range.get().map(|result| {
-            match result {
-                Ok((min_year, max_year)) => (min_year..=max_year).rev().collect::<Vec<i32>>(),
-                Err(_) => {
-                    // fallback to hardcoded range if query fails
-                    let current_year = chrono::Local::now().year();
-                    (2020..=current_year).rev().collect()
-                }
-            }
-        }).unwrap_or_else(Vec::new)
-    };
+    let min_year = Memo::new(move |_| {
+        year_range.get()
+            .and_then(|r| r.ok())
+            .map(|(min, _)| min)
+            .unwrap_or(2020)
+    });
+    
+    let max_year = Memo::new(move |_| {
+        year_range.get()
+            .and_then(|r| r.ok())
+            .map(|(_, max)| max)
+            .unwrap_or_else(|| chrono::Local::now().year())
+    });
 
     let companies = Resource::new(
         || (),
@@ -296,22 +300,25 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
                     </select>
                 </div>
 
-                // Replace the year selection divs with YearSelector components
-                <YearSelector
-                    label="Start Year"
-                    value=start_year
-                    set_value=set_start_year
-                    years=year_options()
-                    allow_empty=true
-                />
+                <Suspense fallback=move || view! { <div>"Loading year range..."</div> }>
+                    <YearSelector
+                        label="Start Year"
+                        value=start_year
+                        set_value=set_start_year
+                        min_year=min_year
+                        max_year=max_year
+                        allow_empty=true
+                    />
 
-                <YearSelector
-                    label="End Year"
-                    value=end_year
-                    set_value=set_end_year
-                    years=year_options()
-                    allow_empty=false
-                />
+                    <YearSelector
+                        label="End Year"
+                        value=end_year
+                        set_value=set_end_year
+                        min_year=min_year
+                        max_year=max_year
+                        allow_empty=true
+                    />
+                </Suspense>
 
                 <button
                     class="mt-6 px-4 py-2 h-10 bg-seafoam-500 dark:bg-seafoam-600 text-white rounded 
