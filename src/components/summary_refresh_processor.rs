@@ -36,17 +36,129 @@ pub async fn get_company_links() -> Result<Vec<CompanyLink>, ServerFnError> {
         .map_err(|e| ServerFnError::ServerError(e.to_string()))
 }
 
+#[server(GetYearRange, "/api")]
+pub async fn get_year_range(company: Option<String>) -> Result<(i32, i32), ServerFnError> {
+    use crate::supabase::get_client;
+
+    let client = get_client();
+    let mut query = client.from("poasts").select("published_at");
+
+    if let Some(company_name) = company {
+        query = query.eq("company", company_name);
+    }
+
+    let min_response = query
+        .clone()
+        .order("published_at")
+        .limit(1)
+        .execute()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let max_response = query
+        .order("published_at.desc")
+        .limit(1)
+        .execute()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let min_year = min_response
+        .text()
+        .await
+        .ok()
+        .and_then(|text| serde_json::from_str::<Vec<serde_json::Value>>(&text).ok())
+        .and_then(|arr| arr.first().cloned())
+        .and_then(|val| val.get("published_at").cloned())
+        .and_then(|date| date.as_str().map(String::from))
+        .and_then(|date_str| date_str.split('-').next().map(String::from))
+        .and_then(|year_str| year_str.parse::<i32>().ok())
+        .unwrap_or(2020);
+
+    let max_year = max_response
+        .text()
+        .await
+        .ok()
+        .and_then(|text| serde_json::from_str::<Vec<serde_json::Value>>(&text).ok())
+        .and_then(|arr| arr.first().cloned())
+        .and_then(|val| val.get("published_at").cloned())
+        .and_then(|date| date.as_str().map(String::from))
+        .and_then(|date_str| date_str.split('-').next().map(String::from))
+        .and_then(|year_str| year_str.parse::<i32>().ok())
+        .unwrap_or_else(|| chrono::Local::now().year());
+
+    log::info!("Year range found: {} to {}", min_year, max_year);
+    Ok((min_year, max_year))
+}
+
+#[component]
+fn YearSelector(
+    label: &'static str,
+    #[prop(into)] value: Signal<Option<i32>>,
+    #[prop(into)] set_value: WriteSignal<Option<i32>>,
+    #[prop(into)] years: Vec<i32>,
+    #[prop(optional)] allow_empty: bool,
+) -> impl IntoView{
+    view! {
+        <div class="w-full sm:w-40">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {label}
+            </label>
+            <select
+                class="w-full p-2 rounded-md bg-gray-100 dark:bg-teal-800 
+                       text-gray-800 dark:text-gray-200 
+                       border border-teal-500 dark:border-seafoam-500
+                       focus:border-seafoam-600 dark:focus:border-aqua-400
+                       focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400"
+                prop:value=move || value.get().map(|y| y.to_string()).unwrap_or_default()
+                on:change=move |ev| {
+                    let value = event_target_value(&ev);
+                    if value.is_empty() && allow_empty {
+                        set_value(None);
+                    } else if let Ok(year) = value.parse::<i32>() {
+                        set_value(Some(year));
+                    }
+                }
+            >
+                {allow_empty.then(|| view! {
+                    <option value="">"All Years"</option>
+                })}
+                {years.into_iter().map(|year| {
+                    view! {
+                        <option value={year.to_string()}>{year.to_string()}</option>
+                    }
+                }).collect_view()}
+            </select>
+        </div>
+    }
+}
+
 #[component]
 pub fn SummaryRefreshProcessor() -> impl IntoView {
     let (progress_states, set_progress_states) = signal::<HashMap<String, RssProgressUpdate>>(HashMap::new());
     let (is_processing, set_is_processing) = signal(false);
     let (selected_company, set_selected_company) = signal::<Option<String>>(None);
-
-    let current_year = chrono::Local::now().year();
     let (start_year, set_start_year) = signal(Option::<i32>::None);
     let (end_year, set_end_year) = signal(Option::<i32>::None);
 
-    let year_options = (2020..=current_year).rev().collect::<Vec<i32>>();
+    let year_range = Resource::new(
+        move || selected_company.get(),
+        |company| async move {
+            get_year_range(company).await
+        }
+    );
+
+    let year_options = move || {
+        year_range.get().map(|result| {
+            match result {
+                Ok((min_year, max_year)) => (min_year..=max_year).rev().collect::<Vec<i32>>(),
+                Err(_) => {
+                    // fallback to hardcoded range if query fails
+                    let current_year = chrono::Local::now().year();
+                    (2020..=current_year).rev().collect()
+                }
+            }
+        }).unwrap_or_else(Vec::new)
+    };
 
     let companies = Resource::new(
         || (),
@@ -63,6 +175,13 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
                 })
         }
     );
+
+    Effect::new(move |_| {
+        // reset year selection when company changes
+        selected_company.get();
+        set_start_year(None);
+        set_end_year(None);
+    });
 
     let start_refresh = move || {
         set_is_processing(true);
@@ -139,8 +258,11 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
 
     view! {
         <div class="p-4 space-y-4">
-            <div class="flex items-center space-x-4">
-                <div class="w-64">
+            <div class="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+                <div class="w-full sm:w-64">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        "Company"
+                    </label>
                     <select
                         class="w-full p-2 rounded-md bg-gray-100 dark:bg-teal-800 
                                text-gray-800 dark:text-gray-200 
@@ -174,75 +296,25 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
                     </select>
                 </div>
 
-                // Year Range Selection
-                <div class="w-full sm:w-40">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        "Start Year"
-                    </label>
-                    <select
-                        class="w-full p-2 rounded-md bg-gray-100 dark:bg-teal-800 
-                               text-gray-800 dark:text-gray-200 
-                               border border-teal-500 dark:border-seafoam-500
-                               focus:border-seafoam-600 dark:focus:border-aqua-400
-                               focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400"
-                        prop:value=move || start_year.get().map(|y| y.to_string()).unwrap_or_default()
-                        on:change=move |ev| {
-                            let value = event_target_value(&ev);
-                            if value.is_empty() {
-                                set_start_year(None);
-                            } else if let Ok(year) = value.parse::<i32>() {
-                                set_start_year(Some(year));
-                                if let Some(end_y) = end_year.get() {
-                                    if year > end_y {
-                                        set_end_year(Some(year));
-                                    }
-                                }
-                            }
-                        }
-                    >
-                        {year_options.clone().into_iter().map(|year| {
-                            view! {
-                                <option value={year.to_string()}>{year.to_string()}</option>
-                            }
-                        }).collect_view()}
-                    </select>
-                </div>
+                // Replace the year selection divs with YearSelector components
+                <YearSelector
+                    label="Start Year"
+                    value=start_year
+                    set_value=set_start_year
+                    years=year_options()
+                    allow_empty=true
+                />
 
-                <div class="w-full sm:w-40">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        "End Year"
-                    </label>
-                    <select
-                        class="w-full p-2 rounded-md bg-gray-100 dark:bg-teal-800 
-                               text-gray-800 dark:text-gray-200 
-                               border border-teal-500 dark:border-seafoam-500
-                               focus:border-seafoam-600 dark:focus:border-aqua-400
-                               focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400"
-                        prop:value=move || end_year.get().map(|y| y.to_string()).unwrap_or_default()
-                        on:change=move |ev| {
-                            let value = event_target_value(&ev);
-                            if value.is_empty() {
-                                set_end_year(None);
-                            } else if let Ok(year) = value.parse::<i32>() {
-                                set_end_year(Some(year));
-                                if let Some(start_y) = start_year.get() {
-                                    if year < start_y {
-                                        set_start_year(Some(year));
-                                    }
-                                }
-                            }
-                        }
-                    >
-                        {year_options.into_iter().map(|year| {
-                            view! {
-                                <option value={year.to_string()}>{year.to_string()}</option>
-                            }
-                        }).collect_view()}
-                    </select>
-                </div>
+                <YearSelector
+                    label="End Year"
+                    value=end_year
+                    set_value=set_end_year
+                    years=year_options()
+                    allow_empty=false
+                />
 
                 <button
-                    class="px-4 py-2 bg-seafoam-500 dark:bg-seafoam-600 text-white rounded 
+                    class="mt-6 px-4 py-2 h-10 bg-seafoam-500 dark:bg-seafoam-600 text-white rounded 
                            hover:bg-seafoam-400 dark:hover:bg-seafoam-500 transition-colors
                            disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
                     on:click=move |_| start_refresh()
@@ -250,19 +322,13 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
                 >
                     {move || if is_processing() { "Processing..." } else { "Refresh Summaries" }}
                 </button>
-                
-                {move || is_processing().then(|| view! {
-                    <span class="text-sm text-seafoam-600 dark:text-seafoam-400">
-                        "Refreshing summaries..."
-                    </span>
-                })}
             </div>
 
             {move || {
                 let states = progress_states.get();
                 if !states.is_empty() {
                     view! {
-                        <div class="grid gap-3">
+                        <div class="grid gap-3 mt-6">
                             {states.values().map(|update| {
                                 let is_completed = update.status == "completed";
                                 let status_class = if is_completed {
@@ -317,6 +383,12 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
                     view! { <div></div> }.into_any()
                 }
             }}
+
+            {move || is_processing().then(|| view! {
+                <div class="mt-4 text-center text-sm text-seafoam-600 dark:text-seafoam-400">
+                    "Refreshing summaries..."
+                </div>
+            })}
         </div>
     }
 }
