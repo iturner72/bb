@@ -58,6 +58,7 @@ cfg_if! {
             }
 
             let protected_routes = Router::new()
+                .route("/api/create-stream", get(create_stream))
                 .route("/api/cancel-stream", get(cancel_stream))
                 .route("/api/rss-progress", get(rss_progress_handler))
                 .route("/api/backfill-progress", get(backfill_progress_handler))
