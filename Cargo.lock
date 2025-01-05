@@ -344,6 +344,7 @@ dependencies = [
  "reqwest 0.12.8",
  "scraper",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "thiserror 1.0.61",
  "time",
@@ -2865,6 +2866,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ea7893ff5e2466df8d720bb615088341b295f849602c6956047f8f80f0e9bc1"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde-wasm-bindgen"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8302e169f0eddcc139c70f139d19d6467353af16f9fce27e8c30158036a1e16b"
+dependencies = [
+ "js-sys",
+ "serde",
+ "wasm-bindgen",
 ]
 
 [[package]]
