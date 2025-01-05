@@ -9,6 +9,7 @@ pub mod summary_refresh_service;
 pub mod auth;
 pub mod server_fn;
 pub mod handlers;
+pub mod types;
 #[cfg(feature = "ssr")]
 pub mod cancellable_sse;
 
