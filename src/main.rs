@@ -20,6 +20,7 @@ cfg_if! {
         use bb::auth::server::middleware::require_auth;
         use bb::state::AppState;
         use bb::handlers::*;
+        use bb::cancellable_sse::*;
 
         #[tokio::main]
         async fn main() {
@@ -57,6 +58,7 @@ cfg_if! {
             }
 
             let protected_routes = Router::new()
+                .route("/api/cancel-stream", get(cancel_stream))
                 .route("/api/rss-progress", get(rss_progress_handler))
                 .route("/api/backfill-progress", get(backfill_progress_handler))
                 .route("/api/refresh-summaries", get(refresh_summaries_handler))
