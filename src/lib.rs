@@ -9,6 +9,8 @@ pub mod summary_refresh_service;
 pub mod auth;
 pub mod server_fn;
 pub mod handlers;
+#[cfg(feature = "ssr")]
+pub mod cancellable_sse;
 
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]
