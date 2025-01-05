@@ -3,7 +3,6 @@ use axum::{
     extract::{Query, State},
     Json
 };
-use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use tokio::sync::mpsc as tokio_mpsc;
@@ -11,7 +10,11 @@ use futures::stream::Stream;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use crate::{cancellable_sse::{create_cancellable_sse_stream, CancellableSseStream}, state::AppState};
+use crate::{
+    cancellable_sse::{create_cancellable_sse_stream, CancellableSseStream},
+    state::AppState,
+    types::StreamResponse
+};
 
 pub struct SseStream {
     pub receiver: tokio_mpsc::Receiver<Result<Event, Infallible>>,
@@ -25,15 +28,11 @@ impl Stream for SseStream {
     }
 }
 
-#[derive(Serialize)]
-pub struct StreamResponse {
-    stream_id: String,
-}
-
 pub async fn create_stream(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
 ) -> Json<StreamResponse> {
     let stream_id = uuid::Uuid::new_v4().to_string();
+    state.sse_state.register_stream(stream_id.clone());
     Json(StreamResponse { stream_id })
 }
 
