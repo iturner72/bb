@@ -1,4 +1,3 @@
-use bb::cancellable_sse::SseState;
 use cfg_if::cfg_if;
 
 cfg_if! {
