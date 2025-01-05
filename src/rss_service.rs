@@ -3,6 +3,7 @@ pub mod server {
     use feed_rs::parser;
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
+    use tokio_util::sync::CancellationToken;
     use std::error::Error;
     use std::convert::Infallible;
     use axum::response::sse::Event;
@@ -67,8 +68,9 @@ pub mod server {
     }
 
     pub async fn process_feeds_with_progress(
-        progress_sender: tokio::sync::mpsc::Sender<Result<Event, Infallible>>
-    ) -> Result<(), Box<dyn Error>> {
+        progress_sender: tokio::sync::mpsc::Sender<Result<Event, Infallible>>,
+        cancel_token: CancellationToken,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let supabase = crate::supabase::get_client();
         let openai = Client::with_config(OpenAIConfig::default());
         
@@ -81,6 +83,12 @@ pub mod server {
         let feed_links: Vec<FeedLink> = serde_json::from_str(&response.text().await?)?;
         
         for link_info in feed_links {
+            // check for cancellation before processing each feed
+            if cancel_token.is_cancelled() {
+                log::info!("RSS processing cancelled");
+                return Ok(());
+            }
+
             let mut company_progress = RssProgressUpdate {
                 company: link_info.company.clone(),
                 status: "processing".to_string(),
@@ -134,6 +142,12 @@ pub mod server {
             entries.truncate(entries_limit);
 
             for entry in entries {
+                // check for cancellation before processing each entry
+                if cancel_token.is_cancelled() {
+                    log::info!("RSS processing cancelled while processing entries");
+                    return Ok(());
+                }
+
                 let title = entry.title
                     .as_ref()
                     .map(|t| t.content.clone())
@@ -209,7 +223,7 @@ pub mod server {
 
         // invalidate poasts cache to see new results immediately
         invalidate_poasts_cache().await.map_err(|e| {
-            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn Error>
+            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn Error + Send + Sync>
         })?;
         
         progress_sender
@@ -220,7 +234,7 @@ pub mod server {
         Ok(())
     }
 
-    pub async fn scrape_page(url: &str) -> Result<String, Box<dyn Error>> {
+    pub async fn scrape_page(url: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
         let response = reqwest::get(url).await?.text().await?;
         
         let document = scraper::Html::parse_document(&response);

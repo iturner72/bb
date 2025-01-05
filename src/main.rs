@@ -1,3 +1,4 @@
+use bb::cancellable_sse::SseState;
 use cfg_if::cfg_if;
 
 cfg_if! {
@@ -39,6 +40,7 @@ cfg_if! {
 
             let app_state = AppState {
                 leptos_options: leptos_options.clone(),
+                sse_state: SseState::new(),
             };
 
             async fn server_fn_handler(
