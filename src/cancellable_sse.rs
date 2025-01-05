@@ -1,6 +1,10 @@
-use axum::response::sse::{Event, Sse};
+use axum::{
+    response::sse::{Event, Sse},
+    extract::{Query, State},
+};
 use futures::stream::Stream;
 use std::{
+    collections::HashMap,
     convert::Infallible,
     pin::Pin,
     sync::Arc,
@@ -82,4 +86,16 @@ where
         receiver: rx,
         cancel_token,
     })
+}
+
+pub async fn cancel_stream(
+    State(state): State<SseState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> &'static str {
+    if let Some(stream_id) = params.get("stream_id") {
+        state.cancel_stream(stream_id);
+        "Stream cancelled"
+    } else {
+        "No stream ID provided"
+    }
 }
