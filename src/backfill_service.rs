@@ -2,6 +2,7 @@
 pub mod backfill {
     use axum::response::sse::Event;
     use serde_json::Value;
+    use tokio_util::sync::CancellationToken;
     use std::collections::HashMap;
     use std::convert::Infallible;
     use async_openai::{
@@ -72,8 +73,9 @@ pub mod backfill {
     }
 
     pub async fn backfill_missing_data(
-        progress_sender: tokio::sync::mpsc::Sender<Result<Event, Infallible>>
-    ) -> Result<(), BackfillError> {
+        progress_sender: tokio::sync::mpsc::Sender<Result<Event, Infallible>>,
+        cancel_token: CancellationToken,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         info!("Starting backfill process for posts with missing data");
         let supabase = crate::supabase::get_client();
         let openai = Client::with_config(OpenAIConfig::default());
@@ -98,6 +100,12 @@ pub mod backfill {
         info!("Found {} posts that need backfilling", posts.len());
 
         for (index, post) in posts.iter().enumerate() {
+            // check for cancellation
+            if cancel_token.is_cancelled() {
+                info!("Backfill process cancelled");
+                return Ok(());
+            }
+
             let title = post["title"].as_str().unwrap_or("").to_string();
             let link = post["link"].as_str().unwrap_or("").to_string();
             let company = post["company"].as_str().unwrap_or("").to_string();
@@ -124,6 +132,12 @@ pub mod backfill {
                     text.to_string()
                 }
                 None => {
+                    // check for cancellation before scraping
+                    if cancel_token.is_cancelled() {
+                        info!("Backfill process cancelled before scraping");
+                        return Ok(());
+                    }
+
                     info!("Scraping full_text for post '{}' from {}", title, link);
                     company_progress.status = "scraping".to_string();
                     progress_sender.send(company_progress.clone().into_event())
@@ -208,6 +222,11 @@ pub mod backfill {
 
             // add small delay between poasts to help w rate limiting
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+            if cancel_token.is_cancelled() {
+                info!("Backfill process cancelled after processing post");
+                return Ok(());
+            }
         }
 
         if posts.is_empty() {

@@ -55,23 +55,31 @@ pub async fn rss_progress_handler(
 }
 
 pub async fn backfill_progress_handler(
-    Query(_params): Query<HashMap<String, String>>,
-) -> Sse<SseStream> {
-    let (tx, rx) = tokio_mpsc::channel(100);
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Sse<CancellableSseStream> {
+    let stream_id = params
+        .get("stream_id")
+        .cloned()
+        .expect("stream_id is required");
 
-    tokio::spawn(async move {
-        if let Err(e) = crate::backfill_service::backfill::backfill_missing_data(tx).await {
-            log::error!("Error during backfill: {}", e);
-        }
-    });
-
-    Sse::new(SseStream { receiver: rx })
+    create_cancellable_sse_stream(
+        state.sse_state,
+        stream_id,
+        |tx, token| async move {
+            crate::backfill_service::backfill::backfill_missing_data(tx, token).await
+        },
+    ).await
 }
 
 pub async fn refresh_summaries_handler(
+    State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
-) -> Sse<SseStream> {
-    let (tx, rx) = tokio_mpsc::channel(100);
+) -> Sse<CancellableSseStream> {
+    let stream_id = params
+        .get("stream_id")
+        .cloned()
+        .expect("stream_id is required");
 
     let company = params.get("company").cloned();
     let start_year = params
@@ -81,17 +89,18 @@ pub async fn refresh_summaries_handler(
         .get("end_year")
         .and_then(|y| y.parse::<i32>().ok());
 
-    tokio::spawn(async move {
-        if let Err(e) = crate::summary_refresh_service::refresh::refresh_summaries(
-            tx,
-            company,
-            start_year,
-            end_year
-        ).await {
-            log::error!("Error refreshing summaries: {}", e);
-        }
-    });
-
-    Sse::new(SseStream { receiver: rx})
+    create_cancellable_sse_stream(
+        state.sse_state,
+        stream_id,
+        move |tx, token| async move {
+            crate::summary_refresh_service::refresh::refresh_summaries(
+                tx,
+                token,
+                company,
+                start_year,
+                end_year
+            ).await
+        },
+    ).await
 }
 
