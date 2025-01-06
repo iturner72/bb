@@ -1,70 +1,119 @@
 use::leptos::prelude::*;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::JsFuture;
 use web_sys::{EventSource, MessageEvent, ErrorEvent};
 use std::collections::HashMap;
 
 use crate::server_fn::RssProgressUpdate;
+use crate::types::StreamResponse;
 
 #[component]
 pub fn BatchProcessor() -> impl IntoView {
     let (progress_states, set_progress_states) = signal::<HashMap<String, RssProgressUpdate>>(HashMap::new());
     let (is_processing, set_is_processing) = signal(false);
     let (no_posts_to_process, set_no_posts_to_process) = signal(false);
+    let (current_stream_id, set_current_stream_id) = signal(Option::<String>::None);
+
+    let cancel_backfill = move || {
+        if let Some(stream_id) = current_stream_id.get() {
+            let window = web_sys::window().unwrap();
+            let url = format!("/api/cancel-stream?stream_id={}", stream_id);
+
+            wasm_bindgen_futures::spawn_local(async move {
+                if let Ok(_) = JsFuture::from(window.fetch_with_str(&url)).await {
+                    log::info!("Stream cancelled");
+                }
+            });
+            set_is_processing(false);
+            set_current_stream_id(None);
+        }
+    };
 
     let start_backfill = move || {
         set_is_processing(true);
         set_no_posts_to_process(false);
         set_progress_states.update(|states| states.clear());
 
-        let event_source = EventSource::new("/api/backfill-progress")
-            .expect("Failed to connect to SSE endpoint");
+        let window = web_sys::window().unwrap();
 
-        let event_source_clone = event_source.clone();
-
-        let on_message = Closure::wrap(Box::new(move |event: MessageEvent| {
-            if let Some(data) = event.data().as_string() {
-                if data == "[DONE]" {
-                    event_source_clone.close();
+        wasm_bindgen_futures::spawn_local(async move {
+            let resp_value = match JsFuture::from(window.fetch_with_str("/api/create-stream")).await {
+                Ok(val) => val,
+                Err(e) => {
+                    log::error!("Failed to fetch: {:?}", e);
                     set_is_processing(false);
+                    return;
+                }
+            };
 
-                    if progress_states.get().is_empty() {
-                        set_no_posts_to_process(true);
-                    }
-                } else {
-                    match serde_json::from_str::<RssProgressUpdate>(&data) {
-                        Ok(update) => {
-                            set_progress_states.update(|states| {
-                                states.insert(update.company.clone(), update);
-                            });
-                        },
-                        Err(e) => log::error!("Failed to parse update: {}", e)
+            let resp = resp_value.dyn_into::<web_sys::Response>().unwrap();
+            let json = match JsFuture::from(resp.json().unwrap()).await {
+                Ok(json) => json,
+                Err(e) => {
+                    log::error!("Failed to parse JSON: {:?}", e);
+                    set_is_processing(false);
+                    return;
+                }
+            };
+
+            let stream_data: StreamResponse = serde_wasm_bindgen::from_value(json).unwrap();
+            let stream_id = stream_data.stream_id;
+
+            set_current_stream_id(Some(stream_id.clone()));
+
+            let url = format!("/api/backfill-progress?stream_id={}", stream_id);
+            let event_source = EventSource::new(&url)
+                .expect("Failed to connect to SSE endpoint");
+
+            let event_source_clone = event_source.clone();
+            let on_message = Closure::wrap(Box::new(move |event: MessageEvent| {
+                if let Some(data) = event.data().as_string() {
+                    if data == "[DONE]" {
+                        event_source_clone.close();
+                        set_is_processing(false);
+                        set_current_stream_id(None);
+
+                        if progress_states.get().is_empty() {
+                            set_no_posts_to_process(true);
+                        }
+                    } else {
+                        match serde_json::from_str::<RssProgressUpdate>(&data) {
+                            Ok(update) => {
+                                set_progress_states.update(|states| {
+                                    states.insert(update.company.clone(), update);
+                                });
+                            },
+                            Err(e) => log::error!("Failed to parse update: {}", e)
+                        }
                     }
                 }
-            }
-        }) as Box<dyn FnMut(_)>);
+            }) as Box<dyn FnMut(_)>);
 
-        let event_source_error = event_source.clone();
+            let event_source_error = event_source.clone();
 
-        let on_error = Closure::wrap(Box::new(move |error: ErrorEvent| {
-            log::error!("SSE Error: {:?}", error);
-            if let Some(es) = error.target()
-                .and_then(|t| t.dyn_into::<web_sys::EventSource>().ok()) 
-            {
-                if es.ready_state() == web_sys::EventSource::CLOSED {
-                    if let Some(window) = web_sys::window() {
-                        let _ = window.location().set_href("/admin");
+            let on_error = Closure::wrap(Box::new(move |error: ErrorEvent| {
+                log::error!("SSE Error: {:?}", error);
+                if let Some(es) = error.target()
+                    .and_then(|t| t.dyn_into::<web_sys::EventSource>().ok()) 
+                {
+                    if es.ready_state() == web_sys::EventSource::CLOSED {
+                        if let Some(window) = web_sys::window() {
+                            let _ = window.location().set_href("/admin");
+                        }
                     }
                 }
-            }
-            event_source_error.close();
-        }) as Box<dyn FnMut(_)>);
+                event_source_error.close();
+                set_is_processing(false);
+                set_current_stream_id(None);
+            }) as Box<dyn FnMut(_)>);
 
-        event_source.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
-        event_source.set_onerror(Some(on_error.as_ref().unchecked_ref()));
+            event_source.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
+            event_source.set_onerror(Some(on_error.as_ref().unchecked_ref()));
 
-        on_message.forget();
-        on_error.forget();
+            on_message.forget();
+            on_error.forget();
+        });
     };
 
     view! {
@@ -74,10 +123,9 @@ pub fn BatchProcessor() -> impl IntoView {
                     class="px-4 py-2 bg-seafoam-500 dark:bg-seafoam-600 text-white rounded 
                            hover:bg-seafoam-400 dark:hover:bg-seafoam-500 transition-colors
                            disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-                    on:click=move |_| start_backfill()
-                    disabled=is_processing
+                    on:click=move |_| if is_processing.get() { cancel_backfill() } else { start_backfill() }
                 >
-                    {move || if is_processing() { "Processing..." } else { "Start Backfill" }}
+                    {move || if is_processing() { "Cancel" } else { "Start Backfill" }}
                 </button>
                 
                 {move || is_processing().then(|| view! {
