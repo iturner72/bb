@@ -10,6 +10,7 @@ use crate::components::rss_test::RssTest;
 use crate::components::batch_processor::BatchProcessor;
 use crate::components::summary_refresh_processor::SummaryRefreshProcessor;
 use crate::components::dark_mode_toggle::DarkModeToggle;
+use crate::components::footer::Footer;
 use crate::auth::auth_components::{AdminLogin, ProtectedRoute};
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
@@ -74,6 +75,7 @@ fn HomePage() -> impl IntoView {
                 </div>
             </div>
             <Poasts/>
+            <Footer/>
         </div>
     }
 }
