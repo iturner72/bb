@@ -113,13 +113,13 @@ pub fn AdminLogin() -> impl IntoView {
 
 #[component]
 pub fn LogoutButton() -> impl IntoView {
-    let navigate = use_navigate();
-
     let logout_action = ServerAction::<LogoutFn>::new();
 
     Effect::new(move |_| {
         if logout_action.version().get() > 0 {
-            navigate("/", NavigateOptions::default());
+            if let Some(window) = web_sys::window() {
+                let _ = window.location().set_href("/");
+            }
         }
     });
 

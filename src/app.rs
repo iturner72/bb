@@ -9,8 +9,8 @@ use crate::components::poasts::Poasts;
 use crate::components::rss_test::RssTest;
 use crate::components::batch_processor::BatchProcessor;
 use crate::components::summary_refresh_processor::SummaryRefreshProcessor;
-use crate::components::dark_mode_toggle::DarkModeToggle;
 use crate::components::footer::Footer;
+use crate::components::auth_nav::AuthNav;
 use crate::auth::auth_components::{AdminLogin, ProtectedRoute};
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
@@ -56,23 +56,7 @@ fn HomePage() -> impl IntoView {
                 <a href="/" class="text-3xl text-left text-seafoam-600 dark:text-mint-400 ib pl-4 p-4 font-bold">
                     "bryptoblogs"
                 </a>
-                <div class="items-end pr-4 flex space-x-4">
-                    <a 
-                        href="/admin-panel"
-                        class="text-teal-600 dark:text-aqua-400 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors duration-200"
-                    >
-                        "admin"
-                    </a>
-                    <a 
-                        href="https://github.com/iturner72/bb" 
-                        class="text-teal-600 dark:text-aqua-400 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors duration-200"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                    >
-                        "github"
-                    </a>
-                    <DarkModeToggle />
-                </div>
+                <AuthNav/>
             </div>
             <Poasts/>
             <Footer/>
