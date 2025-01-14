@@ -3,6 +3,20 @@ use serde::{Serialize, Deserialize};
 use std::borrow::Cow;
 use crate::components::search::BlogSearch;
 
+#[cfg(feature = "hydrate")]
+macro_rules! console_log {
+    ($($t:tt)*) => {
+        web_sys::console::log_1(&format!($($t)*).into());
+    };
+}
+
+#[cfg(not(feature = "hydrate"))]
+macro_rules! console_log {
+    ($($t:tt)*) => {
+        log::info!($($t)*);
+    };
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Poast {
     pub id: i32,
@@ -21,8 +35,75 @@ pub struct Links {
     pub logo_url: Option<String>,
 }
 
+#[server(GetCompanies, "/api")]
+pub async fn get_companies() -> Result<Vec<String>, ServerFnError> {
+    use crate::supabase::get_client;
+    use log::{info, error};
+    use std::fmt;
+
+    #[derive(Debug)]
+    enum CompaniesError {
+        Request(String),
+        Parse(String),
+    }
+    
+    impl fmt::Display for CompaniesError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                CompaniesError::Request(e) => write!(f, "reqwest error: {}", e),
+                CompaniesError::Parse(e) => write!(f, "JSON parse error: {}", e),
+            }
+        }
+    }
+    
+    fn to_server_error(e: CompaniesError) -> ServerFnError {
+        ServerFnError::ServerError(e.to_string())
+    }
+
+
+    let client = get_client();
+
+    let response = client
+        .from("links")
+        .select("company")
+        .execute()
+        .await
+        .map_err(|e| {
+            error!("Failed to fetch companies: {}", e);
+            CompaniesError::Request("Failed to fetch companies".to_string())
+        }).map_err(to_server_error)?;
+
+    let response_text = response.text().await
+        .map_err(|e| {
+            error!("Failed to get response text: {}", e);
+            CompaniesError::Request("Failed to read response".to_string())
+        }).map_err(to_server_error)?;
+
+    let companies: Vec<serde_json::Value> = serde_json::from_str(&response_text)
+        .map_err(|e| {
+            error!("Failed to parse JSON: {}", e);
+            CompaniesError::Parse("Failed to parse companies data".to_string())
+        }).map_err(to_server_error)?;
+
+    let mut company_names: Vec<String> = companies
+        .into_iter()
+        .filter_map(|v| v["company"].as_str().map(String::from))
+        .collect();
+    company_names.sort();
+    company_names.dedup();
+
+    info!("Successfully fetched {} companies", company_names.len());
+    Ok(company_names)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PostFilter {
+    pub search_term: Option<String>,
+    pub company: Option<String>,
+}
+
 #[server(GetPoasts, "/api")]
-pub async fn get_poasts(search_term: Option<String>) -> Result<Vec<Poast>, ServerFnError> {
+pub async fn get_poasts(filter: Option<PostFilter>) -> Result<Vec<Poast>, ServerFnError> {
     use crate::supabase::get_client;
     use serde_json::from_str;
     use std::fmt;
@@ -50,7 +131,7 @@ pub async fn get_poasts(search_term: Option<String>) -> Result<Vec<Poast>, Serve
     }
 
     // check cache only if no search term is provided
-    if search_term.is_none() {
+    if filter.is_none() {
         let cache_duration = CACHE_DURATION;
         let cached_data = POASTS_CACHE.lock().unwrap().clone();
 
@@ -72,13 +153,22 @@ pub async fn get_poasts(search_term: Option<String>) -> Result<Vec<Poast>, Serve
         .order("published_at.desc")
         .limit(30);
 
-    if let Some(ref term) = search_term {
-        if !term.trim().is_empty() {
-            info!("Searching for term: {}", term);
-            request = request.or(format!(
-                "title.ilike.%{}%,summary.ilike.%{}%",
-                term, term
-            ));
+    if let Some(ref filter) = filter {
+        if let Some(ref term) = filter.search_term {
+            if !term.trim().is_empty() {
+                info!("Searching for term: {}", term);
+                request = request.or(format!(
+                        "title.ilike.%{}%,summary.ilike.%{}%",
+                        term, term
+                ));
+            }
+        }
+
+        if let Some(ref company) = filter.company.clone().filter(|c| !c.trim().is_empty()) {
+            info!("Filtering by company: {}", company);
+            request = request.eq("company", company);
+        } else {
+            info!("No company filter applied - showing all companies");
         }
     }
 
@@ -113,7 +203,7 @@ pub async fn get_poasts(search_term: Option<String>) -> Result<Vec<Poast>, Serve
     info!("successfully parsed {} poasts", poasts.len());
 
     // update cache
-    if search_term.is_none() {
+    if filter.is_none() { 
         let mut cache = POASTS_CACHE.lock().unwrap();
         *cache = (Some(poasts.clone()), Instant::now());
     }
@@ -124,55 +214,27 @@ pub async fn get_poasts(search_term: Option<String>) -> Result<Vec<Poast>, Serve
 #[component]
 pub fn Poasts() -> impl IntoView {
     let (search_input, set_search_input) = signal(String::new());
-    
-    let search_term = Memo::new(move |_| {
-        let input = search_input.get();
-        if input.is_empty() {
-            None
-        } else {
-            Some(input)
-        }
-    });
-    
-    let poasts = Resource::new(
-        move || search_term.get(),
-        get_poasts
-    );
-
     let (selected_company, set_selected_company) = signal(String::new());
-    let (filtered_poasts, set_filtered_poasts) = signal(vec![]);
 
-    let get_unique_companies = move |posts: &[Poast]| -> Vec<String> {
-        let mut companies: Vec<String> = posts
-            .iter()
-            .map(|p| p.company.clone())
-            .collect();
-        companies.sort();
-        companies.dedup();
-        companies
-    };
+    let companies = Resource::new(|| (), |_| get_companies());
 
-    Effect::new(move |_| {
-        let company = selected_company().to_string();
-        let _ = search_term.get();
-
-        poasts.with(|poasts_result| {
-            match poasts_result {
-                Some(Ok(poasts)) => {
-                    let filtered = if company.is_empty() {
-                        poasts.clone()
-                    } else {
-                        poasts.iter()
-                            .filter(|poast| poast.company == company)
-                            .cloned()
-                            .collect()
-                    };
-                    set_filtered_poasts(filtered);
-                },
-                _ => set_filtered_poasts(vec![]),
-            }
-        });
-    });
+    let poasts = Resource::new(
+        move || {
+            let search = search_input.get();
+            let company = selected_company.get();
+            
+            console_log!("Filter changed - search: '{}', company: '{}'", search, company);
+            
+            (search, company)
+        },
+        move |(search, company)| {
+            let filter = PostFilter {
+                search_term: if search.trim().is_empty() { None } else { Some(search) },
+                company: if company.trim().is_empty() { None } else { Some(company) },
+            };
+            get_poasts(Some(filter))
+        }
+    );
 
     view! {
         <div class="pt-4 space-y-4">
@@ -181,10 +243,10 @@ pub fn Poasts() -> impl IntoView {
             <Suspense fallback=|| view! { <div class="pl-4 h-10"></div> }>
                 <div class="flex justify-start mb-2 pl-4">
                     {move || {
-                        poasts.get().map(|posts_result| {
-                            match posts_result {
-                                Ok(posts) => {
-                                    let companies = get_unique_companies(&posts);
+                        companies.get().map(|companies_result| {
+                            let selected = selected_company.get();
+                            match companies_result {
+                                Ok(companies) => {
                                     view! {
                                         <>
                                             <select
@@ -198,7 +260,12 @@ pub fn Poasts() -> impl IntoView {
                                                 {companies.into_iter()
                                                     .map(|company| {
                                                         view! {
-                                                            <option value={company.clone()}>{company.clone()}</option>
+                                                            <option 
+                                                                value={company.clone()}
+                                                                selected={selected == company}
+                                                            >
+                                                                {company.clone()}
+                                                            </option>
                                                         }
                                                     })
                                                     .collect_view()
@@ -216,24 +283,41 @@ pub fn Poasts() -> impl IntoView {
 
             <Suspense fallback=|| view! { <p class="text-center text-teal-600 dark:text-aqua-400">"Loading..."</p> }>
                 {move || {
-                    let poasts = filtered_poasts();
-                    if poasts.is_empty() {
-                        view! { <div class="text-center text-gray-500 dark:text-gray-400">"No posts found"</div> }.into_any()
-                    } else {
-                        view! {
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                <For
-                                    each=move || poasts.clone()
-                                    key=|poast| poast.id
-                                    children=move |poast| view! { 
-                                        <BlogPoast 
-                                            poast=poast 
-                                            search_term=search_input.get()
-                                        /> 
-                                    }
-                                />
+                    match poasts.get() {
+                        Some(Ok(posts)) => {
+                            if posts.is_empty() {
+                                view! { 
+                                    <div class="text-center text-gray-500 dark:text-gray-400">
+                                        "No posts found"
+                                    </div> 
+                                }.into_any()
+                            } else {
+                                view! {
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                        <For
+                                            each=move || posts.clone()
+                                            key=|poast| poast.id
+                                            children=move |poast| view! { 
+                                                <BlogPoast 
+                                                    poast=poast 
+                                                    search_term=search_input.get()
+                                                /> 
+                                            }
+                                        />
+                                    </div>
+                                }.into_any()
+                            }
+                        },
+                        Some(Err(_)) => view! {
+                            <div class="text-center text-red-500">
+                                "Error loading posts"
                             </div>
-                        }.into_any()
+                        }.into_any(),
+                        None => view! {
+                            <div class="text-center text-gray-500 dark:text-gray-400">
+                                "Loading..."
+                            </div>
+                        }.into_any(),
                     }
                 }}
             </Suspense>
