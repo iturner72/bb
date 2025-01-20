@@ -67,176 +67,202 @@ pub mod server {
         Json(#[from] serde_json::Error),
     }
 
-    pub async fn process_feeds_with_progress(
-        progress_sender: tokio::sync::mpsc::Sender<Result<Event, Infallible>>,
-        cancel_token: CancellationToken,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let supabase = crate::supabase::get_client();
-        let openai = Client::with_config(OpenAIConfig::default());
+pub async fn process_feeds_with_progress(
+    progress_sender: tokio::sync::mpsc::Sender<Result<Event, Infallible>>,
+    cancel_token: CancellationToken,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let supabase = crate::supabase::get_client();
+    let openai = Client::with_config(OpenAIConfig::default());
+    
+    let response = supabase
+        .from("links")
+        .select("company,link,last_processed")
+        .execute()
+        .await?;
+    
+    let feed_links: Vec<FeedLink> = serde_json::from_str(&response.text().await?)?;
+    
+    for link_info in feed_links {
+        // check for cancellation before processing each feed
+        if cancel_token.is_cancelled() {
+            log::info!("RSS processing cancelled");
+            return Ok(());
+        }
+
+        let mut company_progress = RssProgressUpdate {
+            company: link_info.company.clone(),
+            status: "processing".to_string(),
+            new_posts: 0,
+            skipped_posts: 0,
+            current_post: None,
+        };
         
-        let response = supabase
-            .from("links")
-            .select("company,link,last_processed")
-            .execute()
-            .await?;
+        // Send initial company status
+        progress_sender.send(
+            company_progress.clone().into_event()
+        ).await?;
         
-        let feed_links: Vec<FeedLink> = serde_json::from_str(&response.text().await?)?;
-        
-        for link_info in feed_links {
-            // check for cancellation before processing each feed
+        // Process feed entries
+        let response = match reqwest::Client::new()
+            .get(&link_info.link)
+            .header("User-Agent", "Mozilla/5.0 (compatible; BlogBot/1.0)")
+            .send()
+            .await {
+                Ok(resp) => resp,
+                Err(e) => {
+                    log::info!("Skipping {} - Failed to fetch feed: {}", link_info.company, e);
+                    company_progress.status = "skipped".to_string();
+                    progress_sender.send(company_progress.into_event()).await?;
+                    continue;
+                }
+            };
+            
+        let content = match response.bytes().await {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                log::info!("Skipping {} - Failed to read feed content: {}", link_info.company, e);
+                company_progress.status = "skipped".to_string();
+                progress_sender.send(company_progress.into_event()).await?;
+                continue;
+            }
+        };
+
+        let feed = match parser::parse(&content[..]) {
+            Ok(parsed_feed) => parsed_feed,
+            Err(e) => {
+                log::info!("Skipping {} - Failed to parse feed: {}", link_info.company, e);
+                company_progress.status = "skipped".to_string();
+                progress_sender.send(company_progress.into_event()).await?;
+                continue;
+            }
+        };
+
+        // sort by date, reverse chron 
+        let mut entries = feed.entries;
+        entries.sort_by(|a, b| b.published.cmp(&a.published)); 
+
+        // determine how many entries to process based on last_processed timestamp
+        let entries_limit = match &link_info.last_processed {
+            None => {
+                log::info!("First time processing {}, fetching all entries", link_info.company);
+                entries.len()  // for new companies, process all entries
+            }
+            Some(last_processed) => {
+                let time_since_last_process = Utc::now() - *last_processed;
+                if time_since_last_process > EXTENDED_PROCESSING_THRESHOLD {
+                    log::info!(
+                        "Over 2 weeks since last processing {} ({}), fetching {} entries",
+                        link_info.company,
+                        time_since_last_process.num_days(),
+                        EXTENDED_ENTRY_LIMIT
+                    );
+                    EXTENDED_ENTRY_LIMIT
+                } else {
+                    log::info!(
+                        "Recent processing for {} ({} days ago), fetching {} entries",
+                        link_info.company,
+                        time_since_last_process.num_days(),
+                        STANDARD_ENTRY_LIMIT
+                    );
+                    STANDARD_ENTRY_LIMIT
+                }
+            }
+        };
+
+        entries.truncate(entries_limit);
+
+        for entry in entries {
+            // check for cancellation before processing each entry
             if cancel_token.is_cancelled() {
-                log::info!("RSS processing cancelled");
+                log::info!("RSS processing cancelled while processing entries");
                 return Ok(());
             }
 
-            let mut company_progress = RssProgressUpdate {
-                company: link_info.company.clone(),
-                status: "processing".to_string(),
-                new_posts: 0,
-                skipped_posts: 0,
-                current_post: None,
-            };
+            let title = entry.title
+                .as_ref()
+                .map(|t| t.content.clone())
+                .unwrap_or_else(|| "Untitled".to_string());
+
+            company_progress.current_post = Some(title.clone());
+            progress_sender.send(company_progress.clone().into_event()).await?;
             
-            // Send initial company status
-            progress_sender.send(
-                company_progress.clone().into_event()
-            ).await?;
+            let entry_link = entry.links
+                .first()
+                .map(|l| l.href.clone())
+                .unwrap_or_else(String::new);
             
-            // Process feed entries
-            let response = reqwest::Client::new()
-                .get(&link_info.link)
-                .header("User-Agent", "Mozilla/5.0 (compatible; BlogBot/1.0)")
-                .send()
-                .await?;
-            let content = response.bytes().await?;
-            let feed = parser::parse(&content[..])?;
-
-            // sort by date, reverse chron 
-            let mut entries = feed.entries;
-            entries.sort_by(|a, b| b.published.cmp(&a.published)); 
-
-            // determine how many entries to process based on last_processed timestamp
-            let entries_limit = match &link_info.last_processed {
-                None => {
-                    log::info!("First time processing {}, fetching all entries", link_info.company);
-                    entries.len()  // for new companies, process all entries
-                }
-                Some(last_processed) => {
-                    let time_since_last_process = Utc::now() - *last_processed;
-                    if time_since_last_process > EXTENDED_PROCESSING_THRESHOLD {
-                        log::info!(
-                            "Over 2 weeks since last processing {} ({}), fetching {} entries",
-                            link_info.company,
-                            time_since_last_process.num_days(),
-                            EXTENDED_ENTRY_LIMIT
-                        );
-                        EXTENDED_ENTRY_LIMIT
-                    } else {
-                        log::info!(
-                            "Recent processing for {} ({} days ago), fetching {} entries",
-                            link_info.company,
-                            time_since_last_process.num_days(),
-                            STANDARD_ENTRY_LIMIT
-                        );
-                        STANDARD_ENTRY_LIMIT
-                    }
-                }
-            };
-
-            entries.truncate(entries_limit);
-
-            for entry in entries {
-                // check for cancellation before processing each entry
-                if cancel_token.is_cancelled() {
-                    log::info!("RSS processing cancelled while processing entries");
-                    return Ok(());
-                }
-
-                let title = entry.title
-                    .as_ref()
-                    .map(|t| t.content.clone())
-                    .unwrap_or_else(|| "Untitled".to_string());
-
-                company_progress.current_post = Some(title.clone());
-                progress_sender.send(company_progress.clone().into_event()).await?;
-                
-                let entry_link = entry.links
-                    .first()
-                    .map(|l| l.href.clone())
-                    .unwrap_or_else(String::new);
-                
-                let existing = supabase
-                    .from("poasts")
-                    .select("*")
-                    .eq("link", &entry_link)
-                    .execute()
-                    .await?;
-                
-                let existing_json: Value = serde_json::from_str(&existing.text().await?)?;
-                if !existing_json.as_array().unwrap_or(&Vec::new()).is_empty() {
-                    log::info!("Skipping existing post: {} from {}", title, link_info.company);
-                    company_progress.skipped_posts += 1;
-                    progress_sender.send(company_progress.clone().into_event()).await?;
-                    continue;
-                }
-
-                // Process new post...
-                log::info!("Processing new post: {} from {}", title, link_info.company);
-                let full_text = scrape_page(&entry_link).await?;
-                let insights = get_post_insights(&openai, &title, &full_text).await?;
-                
-                // Insert post...
-                let post = BlogPost {
-                    published_at: entry.published
-                        .map(|d| d.format("%Y-%m-%d").to_string())
-                        .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%d").to_string()),
-                    company: link_info.company.clone(),
-                    title: title.clone(),
-                    link: entry_link,
-                    description: entry.summary.map(|s| s.content),
-                    summary: Some(insights.summary),
-                    full_text: Some(full_text),
-                    buzzwords: Some(insights.buzzwords),
-                };
-
-                let post_json = serde_json::to_string(&post)?;
-                supabase
-                    .from("poasts")
-                    .insert(post_json)
-                    .execute()
-                    .await?;
-
-                company_progress.new_posts += 1;
-                progress_sender.send(company_progress.clone().into_event()).await?;
-            }
-
-            // update last_processed timestamp
-            let now = Utc::now();
-            supabase
-                .from("links")
-                .update(serde_json::to_string(&json!({ "last_processed": now }))?)
-                .eq("company", &link_info.company)
+            let existing = supabase
+                .from("poasts")
+                .select("*")
+                .eq("link", &entry_link)
                 .execute()
                 .await?;
             
-            // Send final company status
-            company_progress.status = "completed".to_string();
-            company_progress.current_post = None;
-            progress_sender.send(company_progress.into_event()).await?;
+            let existing_json: Value = serde_json::from_str(&existing.text().await?)?;
+            if !existing_json.as_array().unwrap_or(&Vec::new()).is_empty() {
+                log::info!("Skipping existing post: {} from {}", title, link_info.company);
+                company_progress.skipped_posts += 1;
+                progress_sender.send(company_progress.clone().into_event()).await?;
+                continue;
+            }
+
+            // Process new post...
+            log::info!("Processing new post: {} from {}", title, link_info.company);
+            let full_text = scrape_page(&entry_link).await?;
+            let insights = get_post_insights(&openai, &title, &full_text).await?;
+            
+            // Insert post...
+            let post = BlogPost {
+                published_at: entry.published
+                    .map(|d| d.format("%Y-%m-%d").to_string())
+                    .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%d").to_string()),
+                company: link_info.company.clone(),
+                title: title.clone(),
+                link: entry_link,
+                description: entry.summary.map(|s| s.content),
+                summary: Some(insights.summary),
+                full_text: Some(full_text),
+                buzzwords: Some(insights.buzzwords),
+            };
+
+            let post_json = serde_json::to_string(&post)?;
+            supabase
+                .from("poasts")
+                .insert(post_json)
+                .execute()
+                .await?;
+
+            company_progress.new_posts += 1;
+            progress_sender.send(company_progress.clone().into_event()).await?;
         }
 
-        // invalidate poasts cache to see new results immediately
-        invalidate_poasts_cache().await.map_err(|e| {
-            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn Error + Send + Sync>
-        })?;
-        
-        progress_sender
-            .send(Ok(Event::default().data("[DONE]")))
+        // update last_processed timestamp
+        let now = Utc::now();
+        supabase
+            .from("links")
+            .update(serde_json::to_string(&json!({ "last_processed": now }))?)
+            .eq("company", &link_info.company)
+            .execute()
             .await?;
-
-        log::info!("RSS processing completed, sent [DONE] message");
-        Ok(())
+        
+        // Send final company status
+        company_progress.status = "completed".to_string();
+        company_progress.current_post = None;
+        progress_sender.send(company_progress.into_event()).await?;
     }
+
+    // invalidate poasts cache to see new results immediately
+    invalidate_poasts_cache().await.map_err(|e| {
+        Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn Error + Send + Sync>
+    })?;
+    
+    progress_sender
+        .send(Ok(Event::default().data("[DONE]")))
+        .await?;
+
+    log::info!("RSS processing completed, sent [DONE] message");
+    Ok(())
+}
 
     pub async fn scrape_page(url: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
         let response = reqwest::get(url).await?.text().await?;
