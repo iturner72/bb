@@ -103,7 +103,11 @@ pub mod server {
             ).await?;
             
             // Process feed entries
-            let response = reqwest::get(&link_info.link).await?;
+            let response = reqwest::Client::new()
+                .get(&link_info.link)
+                .header("User-Agent", "Mozilla/5.0 (compatible; BlogBot/1.0)")
+                .send()
+                .await?;
             let content = response.bytes().await?;
             let feed = parser::parse(&content[..])?;
 
