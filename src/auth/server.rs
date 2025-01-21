@@ -94,37 +94,6 @@ pub mod jwt {
 }
 
 #[cfg(feature = "ssr")]
-use super::types::{AuthResponse, AuthError, to_server_error};
-use leptos::prelude::*;
-impl crate::auth::api::AdminLoginFn {
-    pub async fn run(username: String, password: String) -> Result<AuthResponse, ServerFnError> {
-        log::info!("AdminLoginFn::run called with username: {}", username);
-        
-        match jwt::authenticate_admin(&username, &password).await {
-            Ok(true) => {
-                log::info!("Authentication successful");
-                jwt::generate_token(username).map_err(to_server_error)
-            },
-            Ok(false) => {
-                log::info!("Authentication failed - invalid credentials");
-                Err(to_server_error(AuthError::InvalidCredentials))
-            },
-            Err(e) => {
-                log::error!("Authentication error: {:?}", e);
-                Err(to_server_error(e))
-            }
-        }
-    }
-}
-
-#[cfg(feature = "ssr")]
-impl crate::auth::api::VerifyTokenFn {
-    pub async fn run(token: String) -> Result<bool, ServerFnError> {
-        jwt::verify_token(&token).map_err(to_server_error)
-    }
-}
-
-#[cfg(feature = "ssr")]
 pub mod middleware {
     use axum::{
         body::Body,
@@ -160,11 +129,11 @@ pub mod middleware {
 #[cfg(all(test, feature = "ssr"))]
 mod tests {
     use super::*;
-    use crate::auth::api::AdminLoginFn;
     use std::env;
     use std::sync::Once;
     use once_cell::sync::Lazy;
     use tokio::sync::Mutex;
+    use crate::auth::AuthError;
 
     // global mutex for environment variable operations
     static ENV_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
@@ -174,11 +143,11 @@ mod tests {
         INIT.call_once(|| {
             env::set_var("JWT_SECRET", "test_secret_for_testing_only");
             env::set_var("ADMIN_USERNAME", "test_admin");
-            env::set_var("ADMIN_PASSWORD", "test_password");
+            // Test hash for password "test_password"
+            env::set_var("ADMIN_PASSWORD_HASH", "JGFyZ29uMmlkJHY9MTkkbT0xOTQ1Nix0PTIscD0xJDBOM2l6OGtESkpBTVZ1T0grMnlIWEEkY0RmbjhuaUp4bjJ6SE9kbFlGVUErT2VsZmV5enJXUG1McWtXODBFVHRnYw==");
         });
     }
 
-    // helper to clear env vars temporarily
     struct EnvVarGuard {
         vars: Vec<String>,
         previous_values: std::collections::HashMap<String, Option<String>>,
@@ -231,16 +200,7 @@ mod tests {
             let auth_response = jwt::generate_token("test_user".to_string())
                 .expect("Token generation should succeed");
 
-            // debug failed token gen
-            println!("Generated token: {}", auth_response.token);
-            println!("JWT_SECRET environment variable: {:?}", env::var("JWT_SECRET"));
-
             let result = jwt::verify_token(&auth_response.token);
-
-            if let Err(ref e) = result {
-                println!("Verification error: {:?}", e);
-            }
-
             assert!(result.is_ok(), "Token verification should succeed");
             assert!(result.unwrap(), "Token should be valid");
         }
@@ -262,18 +222,50 @@ mod tests {
 
     mod admin_login_tests {
         use super::*;
+        use crate::auth::secure::verify_password;
+
+        #[tokio::test]
+        async fn test_verify_password_directly() {
+            let _lock = ENV_MUTEX.lock().await;
+            initialize().await;
+
+            let stored_hash = env::var("ADMIN_PASSWORD_HASH").expect("Hash should be set");
+            println!("\nTesting direct password verification:");
+            println!("Stored hash: {}", stored_hash);
+            
+            let result = verify_password("test_password", &stored_hash);
+            println!("Direct verification result: {:?}", result);
+            
+            assert!(result.is_ok(), "Password verification should not error");
+            assert!(result.unwrap(), "Password should verify correctly");
+        }
 
         #[tokio::test]
         async fn test_successful_login() {
             let _lock = ENV_MUTEX.lock().await;
             initialize().await;
 
-            let result = AdminLoginFn::run(
-                "test_admin".to_string(),
-                "test_password".to_string()
-            ).await;
+            // First verify the environment is set up correctly
+            let username = env::var("ADMIN_USERNAME").expect("Username should be set");
+            let stored_hash = env::var("ADMIN_PASSWORD_HASH").expect("Hash should be set");
+            println!("\nTest environment:");
+            println!("Username: {}", username);
+            println!("Stored hash: {}", stored_hash);
 
-            assert!(result.is_ok(), "Login should succeed with correct credentials");
+            // Try the authentication
+            let result = jwt::authenticate_admin("test_admin", "test_password").await;
+
+            match &result {
+                Ok(valid) => println!("Authentication result: {}", valid),
+                Err(e) => println!("Authentication error: {:?}", e),
+            }
+
+            // Try direct password verification
+            let verify_result = verify_password("test_password", &stored_hash);
+            println!("Direct password verification result: {:?}", verify_result);
+
+            assert!(result.is_ok(), "Authentication should succeed");
+            assert!(result.unwrap(), "Authentication should return true");
         }
 
         #[tokio::test]
@@ -281,41 +273,29 @@ mod tests {
             let _lock = ENV_MUTEX.lock().await;
             initialize().await;
 
-            let result = AdminLoginFn::run(
-                "test_admin".to_string(),
-                "wrong_password".to_string()
-            ).await;
-
-            assert!(result.is_err(), "Login should fail with wrong password");
-            assert!(matches!(
-                result.unwrap_err(),
-                ServerFnError::ServerError(e) if e.contains("Invalid username or password")
-            ));
+            let result = jwt::authenticate_admin("test_admin", "wrong_password").await;
+            println!("Wrong password test result: {:?}", result);
+            
+            assert!(result.is_ok(), "Authentication should process without error");
+            assert!(!result.unwrap(), "Authentication should return false for wrong password");
         }
 
         #[tokio::test]
         async fn test_missing_env_vars() {
             let _lock = ENV_MUTEX.lock().await;
 
-            // create guard after aquiring the lock
             let _guard = EnvVarGuard::new(vec![
                 "JWT_SECRET".to_string(),
                 "ADMIN_USERNAME".to_string(),
-                "ADMIN_PASSWORD".to_string(),
+                "ADMIN_PASSWORD_HASH".to_string(),
             ]);
 
-            let result = AdminLoginFn::run(
-                "test_admin".to_string(),
-                "test_password".to_string()
-            ).await;
+            let result = jwt::authenticate_admin("test_admin", "test_password").await;
+            assert!(result.is_err(), "Authentication should fail with missing env vars");
 
-            assert!(result.is_err(), "Login should fail with missing env vars");
-
-            if let Err(ServerFnError::ServerError(e)) = result {
-                assert!(e.contains("Missing environment variable"),
-                    "Error should indicate missing environment variable: {}", e);
-            } else {
-                panic!("Unexpected error type: {:?}", result);
+            match result {
+                Err(AuthError::MissingEnvironmentVar(_)) => (),
+                other => panic!("Expected MissingEnvironmentVar error, got {:?}", other),
             }
         }
     }
