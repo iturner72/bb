@@ -1,6 +1,7 @@
 #[cfg(feature = "ssr")]
 pub mod jwt {
     use super::super::types::{AuthError, AuthResponse, AUTH_COOKIE_NAME};
+    use super::super::secure::verify_password;
     use axum_extra::extract::cookie::{Cookie, SameSite};
     use cookie::time;
     use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
@@ -12,6 +13,29 @@ pub mod jwt {
         sub: String,
         exp: usize,
         iat: usize,
+    }
+
+    pub async fn authenticate_admin(username: &str, password: &str) -> Result<bool, AuthError> {
+        let admin_user = std::env::var("ADMIN_USERNAME")
+            .map_err(|_| AuthError::MissingEnvironmentVar("ADMIN_USERNAME".to_string()))?;
+            
+        let stored_hash = std::env::var("ADMIN_PASSWORD_HASH")
+            .map_err(|_| AuthError::MissingEnvironmentVar("ADMIN_PASSWORD_HASH".to_string()))?;
+    
+        if username != admin_user {
+            return Ok(false);
+        }
+    
+        match verify_password(password, &stored_hash) {
+            Ok(valid) => {
+                log::info!("Password verification result: {}", valid);
+                Ok(valid)
+            },
+            Err(e) => {
+                log::error!("Password verification error: {}", e);
+                Err(AuthError::TokenCreation(e))
+            }
+        }
     }
 
     pub fn generate_token(username: String) -> Result<AuthResponse, AuthError> {
@@ -74,19 +98,22 @@ use super::types::{AuthResponse, AuthError, to_server_error};
 use leptos::prelude::*;
 impl crate::auth::api::AdminLoginFn {
     pub async fn run(username: String, password: String) -> Result<AuthResponse, ServerFnError> {
-        let admin_user = std::env::var("ADMIN_USERNAME")
-            .map_err(|_| AuthError::MissingEnvironmentVar("ADMIN_USERNAME".to_string()))
-            .map_err(to_server_error)?;
-            
-        let admin_pass = std::env::var("ADMIN_PASSWORD")
-            .map_err(|_| AuthError::MissingEnvironmentVar("ADMIN_PASSWORD".to_string()))
-            .map_err(to_server_error)?;
-
-        if username != admin_user || password != admin_pass {
-            return Err(to_server_error(AuthError::InvalidCredentials));
+        log::info!("AdminLoginFn::run called with username: {}", username);
+        
+        match jwt::authenticate_admin(&username, &password).await {
+            Ok(true) => {
+                log::info!("Authentication successful");
+                jwt::generate_token(username).map_err(to_server_error)
+            },
+            Ok(false) => {
+                log::info!("Authentication failed - invalid credentials");
+                Err(to_server_error(AuthError::InvalidCredentials))
+            },
+            Err(e) => {
+                log::error!("Authentication error: {:?}", e);
+                Err(to_server_error(e))
+            }
         }
-
-        jwt::generate_token(username).map_err(to_server_error)
     }
 }
 

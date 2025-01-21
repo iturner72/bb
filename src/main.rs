@@ -35,8 +35,8 @@ cfg_if! {
                 .expect("JWT_SECRET must be set");
             let _ = std::env::var("ADMIN_USERNAME")
                 .expect("ADMIN_USERNAME must be set");
-            let _ = std::env::var("ADMIN_PASSWORD")
-                .expect("ADMIN_PASSWORD must be set");
+            let _ = std::env::var("ADMIN_PASSWORD_HASH")
+                .expect("ADMIN_PASSWORD_HASH must be set");
 
             let app_state = AppState {
                 leptos_options: leptos_options.clone(),
@@ -75,7 +75,7 @@ cfg_if! {
                         move || {
                             provide_context(app_state.clone());
                         },
-                        move || shell(leptos_options.clone()) 
+                        move || shell(leptos_options.clone())
                     );
                     handler(request).await.into_response()
                 }))

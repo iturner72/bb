@@ -6,22 +6,31 @@ pub async fn admin_login(username: String, password: String) -> Result<(), Serve
     #[cfg(feature = "ssr")]
     {
         use super::server::jwt;
+        use super::secure::verify_password;
         use http::{HeaderName, HeaderValue};
 
         let admin_user = std::env::var("ADMIN_USERNAME")
             .map_err(|_| AuthError::MissingEnvironmentVar("ADMIN_USERNAME".to_string()))
             .map_err(to_server_error)?;
             
-        let admin_pass = std::env::var("ADMIN_PASSWORD")
-            .map_err(|_| AuthError::MissingEnvironmentVar("ADMIN_PASSWORD".to_string()))
+        let stored_hash = std::env::var("ADMIN_PASSWORD_HASH")
+            .map_err(|_| AuthError::MissingEnvironmentVar("ADMIN_PASSWORD_HASH".to_string()))
             .map_err(to_server_error)?;
 
-        if username != admin_user || password != admin_pass {
+        // First check username
+        if username != admin_user {
+            return Err(to_server_error(AuthError::InvalidCredentials));
+        }
+
+        // Then verify password against hash
+        let is_valid = verify_password(&password, &stored_hash)
+            .map_err(|e| to_server_error(AuthError::TokenCreation(e)))?;
+
+        if !is_valid {
             return Err(to_server_error(AuthError::InvalidCredentials));
         }
 
         let auth_response = jwt::generate_token(username).map_err(to_server_error)?;
-
         let auth_cookie = jwt::create_auth_cookie(&auth_response.token);
 
         let response_options = use_context::<leptos_axum::ResponseOptions>()

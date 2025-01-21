@@ -1,64 +1,64 @@
 #[cfg(feature = "ssr")]
 pub mod server {
-    use feed_rs::parser;
-    use serde::{Deserialize, Serialize};
-    use serde_json::Value;
-    use tokio_util::sync::CancellationToken;
-    use std::error::Error;
-    use std::convert::Infallible;
-    use axum::response::sse::Event;
-    use chrono::{DateTime, Utc, Duration};
-    use serde_json::json;
-    use async_openai::{
-        config::OpenAIConfig,
-        types::{
-            CreateChatCompletionRequest,
-            ChatCompletionRequestSystemMessage,
-            ChatCompletionRequestUserMessage,
-            ResponseFormat,
-        },
-        Client,
-    };
+use feed_rs::parser;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use tokio_util::sync::CancellationToken;
+use std::error::Error;
+use std::convert::Infallible;
+use axum::response::sse::Event;
+use chrono::{DateTime, Utc, Duration};
+use serde_json::json;
+use async_openai::{
+    config::OpenAIConfig,
+    types::{
+        CreateChatCompletionRequest,
+        ChatCompletionRequestSystemMessage,
+        ChatCompletionRequestUserMessage,
+        ResponseFormat,
+    },
+    Client,
+};
 
-    use crate::server_fn::{invalidate_poasts_cache, RssProgressUpdate};
+use crate::server_fn::{invalidate_poasts_cache, RssProgressUpdate};
 
-    const STANDARD_ENTRY_LIMIT: usize = 5;
-    const EXTENDED_ENTRY_LIMIT: usize = 20;
-    const EXTENDED_PROCESSING_THRESHOLD: Duration = Duration::days(14);
+const STANDARD_ENTRY_LIMIT: usize = 5;
+const EXTENDED_ENTRY_LIMIT: usize = 20;
+const EXTENDED_PROCESSING_THRESHOLD: Duration = Duration::days(14);
 
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct FeedResult {
-        pub company: String,
-        pub new_posts: i32,
-        pub skipped_posts: i32,
-    }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FeedResult {
+    pub company: String,
+    pub new_posts: i32,
+    pub skipped_posts: i32,
+}
 
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct FeedLink {
-        company: String,
-        link: String,
-        last_processed: Option<DateTime<Utc>>,
-    }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FeedLink {
+    company: String,
+    link: String,
+    last_processed: Option<DateTime<Utc>>,
+}
 
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct PostInsights {
-        pub summary: String,
-        pub buzzwords: Vec<String>,
-    }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PostInsights {
+    pub summary: String,
+    pub buzzwords: Vec<String>,
+}
 
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct BlogPost {
-        published_at: String,
-        company: String,
-        title: String,
-        link: String,
-        description: Option<String>,
-        summary: Option<String>,
-        full_text: Option<String>,
-        buzzwords: Option<Vec<String>>,
-    }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BlogPost {
+    published_at: String,
+    company: String,
+    title: String,
+    link: String,
+    description: Option<String>,
+    summary: Option<String>,
+    full_text: Option<String>,
+    buzzwords: Option<Vec<String>>,
+}
 
-    #[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
     pub enum InsightError {
         #[error("OpenAI error: {0}")]
         OpenAI(String),
@@ -264,69 +264,69 @@ pub async fn process_feeds_with_progress(
     Ok(())
 }
 
-    pub async fn scrape_page(url: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
-        let response = reqwest::get(url).await?.text().await?;
-        
-        let document = scraper::Html::parse_document(&response);
-        let body_selector = scraper::Selector::parse("body").unwrap();
-        let text: String = document
-            .select(&body_selector)
-            .flat_map(|element| element.text())
-            .collect();
-        
-        Ok(text)
-    }
+pub async fn scrape_page(url: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+    let response = reqwest::get(url).await?.text().await?;
+    
+    let document = scraper::Html::parse_document(&response);
+    let body_selector = scraper::Selector::parse("body").unwrap();
+    let text: String = document
+        .select(&body_selector)
+        .flat_map(|element| element.text())
+        .collect();
+    
+    Ok(text)
+}
 
-    pub async fn get_post_insights(
-        client: &Client<OpenAIConfig>,
-        title: &str,
-        full_text: &str,
-    ) -> Result<PostInsights, InsightError> {
-        let system_message = ChatCompletionRequestSystemMessage {
-            content: "You are a helpful assistant that creates detailed technical summaries.".into(),
-            name: None,
-        };
+pub async fn get_post_insights(
+    client: &Client<OpenAIConfig>,
+    title: &str,
+    full_text: &str,
+) -> Result<PostInsights, InsightError> {
+    let system_message = ChatCompletionRequestSystemMessage {
+        content: "You are a helpful assistant that creates detailed technical summaries.".into(),
+        name: None,
+    };
 
-        let user_message = ChatCompletionRequestUserMessage {
-            content: format!(
-                "Create a detailed technical summary for a blog post based on the title and full text I provide you. \
-                Include key technical details, architectures discussed, guests featured (if applicable), and main takeaways. \
-                Respond only in JSON with exactly two fields:\n\
-                1. 'summary': A single string containing a comprehensive summary\n\
-                2. 'buzzwords': An array of 5 key technical terms or concepts\n\n\
-                Title: '{}'\n\nFull Text: '{}'",
-                title, full_text
-            ).into(),
-            name: None,
-        };
+    let user_message = ChatCompletionRequestUserMessage {
+        content: format!(
+            "Create a detailed technical summary for a blog post based on the title and full text I provide you. \
+            Include key technical details, architectures discussed, guests featured (if applicable), and main takeaways. \
+            Respond only in JSON with exactly two fields:\n\
+            1. 'summary': A single string containing a comprehensive summary\n\
+            2. 'buzzwords': An array of 5 key technical terms or concepts\n\n\
+            Title: '{}'\n\nFull Text: '{}'",
+            title, full_text
+        ).into(),
+        name: None,
+    };
 
-        let request = CreateChatCompletionRequest {
-            model: "gpt-4o-mini".to_string(),
-            messages: vec![
-                system_message.into(),
-                user_message.into(),
-            ],
-            response_format: Some(ResponseFormat::JsonObject),
-            max_tokens: Some(400),
-            ..Default::default()
-        };
+    let request = CreateChatCompletionRequest {
+        model: "gpt-4o-mini".to_string(),
+        messages: vec![
+            system_message.into(),
+            user_message.into(),
+        ],
+        response_format: Some(ResponseFormat::JsonObject),
+        max_tokens: Some(400),
+        ..Default::default()
+    };
 
-        let response = client.chat().create(request)
-            .await
-            .map_err(|e| InsightError::OpenAI(e.to_string()))?;
+    let response = client.chat().create(request)
+        .await
+        .map_err(|e| InsightError::OpenAI(e.to_string()))?;
 
-        let content = response.choices[0].message.content.clone().unwrap_or_default();
+    let content = response.choices[0].message.content.clone().unwrap_or_default();
 
-        log::info!("Raw OpenAI response for '{}': {}", title, content);
+    log::info!("Raw OpenAI response for '{}': {}", title, content);
 
-        match serde_json::from_str::<PostInsights>(&content) {
-            Ok(insights) => Ok(insights),
-            Err(e) => {
-                log::error!("Failed to parse JSON for '{}': {}\nRaw content: {}", title, e, content);
-                Err(InsightError::Json(e))
-            }
+    match serde_json::from_str::<PostInsights>(&content) {
+        Ok(insights) => Ok(insights),
+        Err(e) => {
+            log::error!("Failed to parse JSON for '{}': {}\nRaw content: {}", title, e, content);
+            Err(InsightError::Json(e))
         }
     }
+}
 }
 
 #[cfg(not(feature = "ssr"))]

@@ -6,10 +6,20 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "bb"
+path = "src/main.rs"
+
+[[bin]]
+name = "hash_password"
+path = "src/bin/hash_password.rs"
+
 [dependencies]
 async-openai = { version = "0.25", optional = true }
+argon2 = { version = "0.5.3", optional = true }
 axum = { version = "0.7.5", features = ["macros"], optional = true }
 axum-extra = { version = "0.9.6", features = ["cookie"], optional = true }
+base64 = { version = "0.22.1", optional = true }
 console_error_panic_hook = "0.1"
 cookie = { version = "0.18.1", optional = true }
 chrono = { version = "0.4.38", features = ["serde"] }
@@ -51,8 +61,10 @@ http = "1"
 hydrate = ["leptos/hydrate"]
 ssr = [
     "dep:async-openai",
+    "dep:argon2",
     "dep:axum",
     "dep:axum-extra",
+    "dep:base64",
     "dep:cookie",
     "dep:dashmap",
     "dep:feed-rs",
@@ -88,6 +100,9 @@ codegen-units = 1
 panic = "abort"
 
 [package.metadata.leptos]
+
+bin-target = "bb"
+
 # The name used by wasm-bindgen/cargo-leptos for the JS/WASM bundle. Defaults to the crate name
 output-name = "bb"
 
