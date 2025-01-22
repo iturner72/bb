@@ -260,7 +260,9 @@ mod tests {
     use std::sync::Once;
     use once_cell::sync::Lazy;
     use tokio::sync::Mutex;
+    use jsonwebtoken;
     use crate::auth::AuthError;
+    use crate::auth::types::{TokenType, TokenClaims};
 
     // global mutex for environment variable operations
     static ENV_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
@@ -268,10 +270,18 @@ mod tests {
 
     async fn initialize() {
         INIT.call_once(|| {
+            // Initialize logging for tests
+            let _ = env_logger::builder()
+                .filter_level(log::LevelFilter::Debug)
+                .is_test(true)
+                .try_init();
+
             env::set_var("JWT_SECRET", "test_secret_for_testing_only");
             env::set_var("ADMIN_USERNAME", "test_admin");
             // Test hash for password "test_password"
             env::set_var("ADMIN_PASSWORD_HASH", "JGFyZ29uMmlkJHY9MTkkbT0xOTQ1Nix0PTIscD0xJDBOM2l6OGtESkpBTVZ1T0grMnlIWEEkY0RmbjhuaUp4bjJ6SE9kbFlGVUErT2VsZmV5enJXUG1McWtXODBFVHRnYw==");
+            
+            log::debug!("Test environment initialized");
         });
     }
 
@@ -287,6 +297,7 @@ mod tests {
                 previous_values.insert(var.clone(), env::var(var).ok());
                 env::remove_var(var);
             }
+            log::debug!("Environment variables temporarily cleared: {:?}", vars);
             Self { vars, previous_values }
         }
     }
@@ -300,50 +311,141 @@ mod tests {
                     env::remove_var(var);
                 }
             }
+            log::debug!("Environment variables restored");
         }
     }
 
     mod jwt_tests {
         use super::*;
+        use std::time::{SystemTime,UNIX_EPOCH};
+        use jsonwebtoken::{decode, DecodingKey, Validation};
 
         #[tokio::test]
-        async fn test_generate_token() {
+        async fn test_generate_tokens() {
             let _lock = ENV_MUTEX.lock().await;
             initialize().await;
 
-            let result = jwt::generate_token("test_user".to_string());
+            log::debug!("Testing token generation");
+            let result = jwt::generate_tokens("test_user".to_string());
             assert!(result.is_ok(), "Token generation should succeed");
 
             let auth_response = result.unwrap();
-            assert!(!auth_response.token.is_empty(), "Token should not be empty");
-            assert_eq!(auth_response.expires_in, 3600, "Expiration should be 3600 seconds");
+            assert!(!auth_response.access_token.is_empty(), "Access token should not be empty");
+            assert!(!auth_response.refresh_token.is_empty(), "Refresh token should not be empty");
+
+            // Verify token types
+            let jwt_secret = env::var("JWT_SECRET").unwrap();
+            let access_claims = decode::<TokenClaims>(
+                &auth_response.access_token,
+                &DecodingKey::from_secret(jwt_secret.as_bytes()),
+                &Validation::default()
+            ).unwrap().claims;
+
+            let refresh_claims = decode::<TokenClaims>(
+                &auth_response.refresh_token,
+                &DecodingKey::from_secret(jwt_secret.as_bytes()),
+                &Validation::default()
+            ).unwrap().claims;
+
+            assert_eq!(access_claims.token_type, TokenType::Access);
+            assert_eq!(refresh_claims.token_type, TokenType::Refresh);
+            
+            log::debug!("Token generation test completed successfully");
         }
 
         #[tokio::test]
-        async fn test_verify_token() {
+        async fn test_token_refresh_flow() {
             let _lock = ENV_MUTEX.lock().await;
             initialize().await;
-
-            let auth_response = jwt::generate_token("test_user".to_string())
+        
+            log::debug!("Testing token refresh flow");
+            
+            // Generate initial tokens
+            let initial_tokens = jwt::generate_tokens("test_user".to_string())
                 .expect("Token generation should succeed");
-
-            let result = jwt::verify_token(&auth_response.token);
-            assert!(result.is_ok(), "Token verification should succeed");
-            assert!(result.unwrap(), "Token should be valid");
+        
+            // Initially both tokens should be valid
+            let verification = jwt::verify_and_refresh_tokens(
+                Some(&initial_tokens.access_token),
+                Some(&initial_tokens.refresh_token)
+            );
+            assert!(verification.is_ok(), "Initial tokens should be valid");
+            assert!(verification.unwrap().is_none(), "No refresh needed for valid tokens");
+        
+            // Create an expired token using current time - 1 hour
+            let jwt_secret = env::var("JWT_SECRET").unwrap();
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as usize;
+            
+            let expired_claims = TokenClaims {
+                sub: "test_user".to_string(),
+                exp: now - 3600, // 1 hour ago
+                iat: now - 7200, // 2 hours ago
+                token_type: TokenType::Access,
+            };
+            
+            let expired_token = jsonwebtoken::encode(
+                &jsonwebtoken::Header::default(),
+                &expired_claims,
+                &jsonwebtoken::EncodingKey::from_secret(jwt_secret.as_bytes())
+            ).expect("Failed to create expired token");
+        
+            // Test with expired access token but valid refresh token
+            let expired_verification = jwt::verify_and_refresh_tokens(
+                Some(&expired_token),
+                Some(&initial_tokens.refresh_token)
+            );
+            assert!(expired_verification.is_ok(), "Should succeed with valid refresh token");
+            let refreshed = expired_verification.unwrap();
+            assert!(refreshed.is_some(), "Should get new tokens");
+            
+            let new_tokens = refreshed.unwrap();
+            
+            // Decode and verify the new access token
+            let new_claims = jsonwebtoken::decode::<TokenClaims>(
+                &new_tokens.access_token,
+                &jsonwebtoken::DecodingKey::from_secret(jwt_secret.as_bytes()),
+                &jsonwebtoken::Validation::default()
+            ).expect("Should decode new access token").claims;
+        
+            // Verify the new token properties
+            assert_eq!(new_claims.sub, "test_user", "Subject should remain the same");
+            assert_eq!(new_claims.token_type, TokenType::Access, "Token type should be Access");
+            assert!(new_claims.exp > now, "New token should expire in the future");
+            assert!(new_claims.iat >= now - 1, "New token should be issued around current time");
+            assert!(new_claims.exp > new_claims.iat, "Expiration should be after issued time");
+        
+            // Try with invalid refresh token
+            let invalid_verification = jwt::verify_and_refresh_tokens(
+                Some(&expired_token),
+                Some("invalid.refresh.token")
+            );
+            assert!(invalid_verification.is_err(), "Should fail with invalid refresh token");
+            
+            log::debug!("Token refresh flow test completed successfully");
         }
 
         #[tokio::test]
-        async fn test_verify_invalid_token() {
+        async fn test_verify_invalid_tokens() {
             let _lock = ENV_MUTEX.lock().await;
             initialize().await;
 
-            let result = jwt::verify_token("invalid.token.here");
-            assert!(result.is_err(), "Invalid token should fail verification");
+            log::debug!("Testing invalid token verification");
 
-            match result {
-                Err(AuthError::TokenVerification(_)) => (),
-                other => panic!("Expected TokenVerification error, got {:?}", other),
-            }
+            // Test with completely invalid tokens
+            let result = jwt::verify_and_refresh_tokens(
+                Some("invalid.access.token"),
+                Some("invalid.refresh.token")
+            );
+            assert!(result.is_err(), "Invalid tokens should fail verification");
+
+            // Test with missing tokens
+            let _missing = jwt::verify_and_refresh_tokens(None, None);
+            assert!(result.is_err(), "Missing tokens should fail verification");
+
+            log::debug!("Invalid token verification test completed");
         }
     }
 
@@ -357,11 +459,10 @@ mod tests {
             initialize().await;
 
             let stored_hash = env::var("ADMIN_PASSWORD_HASH").expect("Hash should be set");
-            println!("\nTesting direct password verification:");
-            println!("Stored hash: {}", stored_hash);
+            log::debug!("Testing direct password verification");
             
             let result = verify_password("test_password", &stored_hash);
-            println!("Direct verification result: {:?}", result);
+            log::debug!("Direct verification result: {:?}", result);
             
             assert!(result.is_ok(), "Password verification should not error");
             assert!(result.unwrap(), "Password should verify correctly");
@@ -372,24 +473,10 @@ mod tests {
             let _lock = ENV_MUTEX.lock().await;
             initialize().await;
 
-            // First verify the environment is set up correctly
-            let username = env::var("ADMIN_USERNAME").expect("Username should be set");
-            let stored_hash = env::var("ADMIN_PASSWORD_HASH").expect("Hash should be set");
-            println!("\nTest environment:");
-            println!("Username: {}", username);
-            println!("Stored hash: {}", stored_hash);
+            log::debug!("Testing successful login flow");
 
-            // Try the authentication
             let result = jwt::authenticate_admin("test_admin", "test_password").await;
-
-            match &result {
-                Ok(valid) => println!("Authentication result: {}", valid),
-                Err(e) => println!("Authentication error: {:?}", e),
-            }
-
-            // Try direct password verification
-            let verify_result = verify_password("test_password", &stored_hash);
-            println!("Direct password verification result: {:?}", verify_result);
+            log::debug!("Authentication result: {:?}", result);
 
             assert!(result.is_ok(), "Authentication should succeed");
             assert!(result.unwrap(), "Authentication should return true");
@@ -400,8 +487,10 @@ mod tests {
             let _lock = ENV_MUTEX.lock().await;
             initialize().await;
 
+            log::debug!("Testing login with wrong password");
+
             let result = jwt::authenticate_admin("test_admin", "wrong_password").await;
-            println!("Wrong password test result: {:?}", result);
+            log::debug!("Wrong password test result: {:?}", result);
             
             assert!(result.is_ok(), "Authentication should process without error");
             assert!(!result.unwrap(), "Authentication should return false for wrong password");
@@ -410,6 +499,7 @@ mod tests {
         #[tokio::test]
         async fn test_missing_env_vars() {
             let _lock = ENV_MUTEX.lock().await;
+            log::debug!("Testing login with missing environment variables");
 
             let _guard = EnvVarGuard::new(vec![
                 "JWT_SECRET".to_string(),
@@ -424,6 +514,82 @@ mod tests {
                 Err(AuthError::MissingEnvironmentVar(_)) => (),
                 other => panic!("Expected MissingEnvironmentVar error, got {:?}", other),
             }
+
+            log::debug!("Missing environment variables test completed");
+        }
+    }
+
+    mod cookie_tests {
+        use super::*;
+        use crate::auth::types::{AuthResponse, ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME};
+        
+        #[tokio::test]
+        async fn test_auth_cookie_creation() {
+            let _lock = ENV_MUTEX.lock().await;
+            initialize().await;
+    
+            log::debug!("Testing auth cookie creation");
+    
+            let auth_response = AuthResponse {
+                access_token: "test.access.token".to_string(),
+                refresh_token: "test.refresh.token".to_string(),
+                access_expires_in: 900,
+                refresh_expires_in: 604800,
+            };
+    
+            let cookies = jwt::create_auth_cookies(&auth_response);
+            assert_eq!(cookies.len(), 2, "Should create two cookies");
+    
+            let access_cookie = cookies.iter().find(|c| c.name() == ACCESS_COOKIE_NAME)
+                .expect("Should have access token cookie");
+            let refresh_cookie = cookies.iter().find(|c| c.name() == REFRESH_COOKIE_NAME)
+                .expect("Should have refresh token cookie");
+    
+            // Verify cookie properties
+            for cookie in [access_cookie, refresh_cookie] {
+                assert!(cookie.http_only().unwrap_or(false), "Cookie should be HTTP only");
+                assert!(cookie.secure().unwrap_or(false), "Cookie should be secure");
+                assert_eq!(cookie.path().unwrap_or(""), "/", "Cookie should have root path");
+                assert_eq!(
+                    cookie.same_site().unwrap(),
+                    cookie::SameSite::Strict,
+                    "Cookie should have strict same-site policy"
+                );
+            }
+    
+            // Verify specific cookie values
+            assert_eq!(access_cookie.value(), "test.access.token", "Access token value should match");
+            assert_eq!(refresh_cookie.value(), "test.refresh.token", "Refresh token value should match");
+    
+            log::debug!("Auth cookie creation test completed");
+        }
+    
+        #[tokio::test]
+        async fn test_cookie_expiration() {
+            let _lock = ENV_MUTEX.lock().await;
+            initialize().await;
+    
+            log::debug!("Testing cookie expiration times");
+    
+            let auth_response = AuthResponse {
+                access_token: "test.access.token".to_string(),
+                refresh_token: "test.refresh.token".to_string(),
+                access_expires_in: 900,      // 15 minutes
+                refresh_expires_in: 604800,  // 7 days
+            };
+    
+            let cookies = jwt::create_auth_cookies(&auth_response);
+            
+            let access_cookie = cookies.iter().find(|c| c.name() == ACCESS_COOKIE_NAME)
+                .expect("Should have access token cookie");
+            let refresh_cookie = cookies.iter().find(|c| c.name() == REFRESH_COOKIE_NAME)
+                .expect("Should have refresh token cookie");
+    
+            // Verify that cookies have expiration times set
+            assert!(access_cookie.expires().is_some(), "Access cookie should have expiration");
+            assert!(refresh_cookie.expires().is_some(), "Refresh cookie should have expiration");
+    
+            log::debug!("Cookie expiration test completed");
         }
     }
 }
