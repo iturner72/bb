@@ -110,7 +110,7 @@ pub async fn process_feeds_with_progress(
             .await {
                 Ok(resp) => resp,
                 Err(e) => {
-                    log::info!("Skipping {} - Failed to fetch feed: {}", link_info.company, e);
+                    log::warn!("Skipping {} - Failed to fetch feed: {}", link_info.company, e);
                     company_progress.status = "skipped".to_string();
                     progress_sender.send(company_progress.into_event()).await?;
                     continue;
@@ -120,7 +120,7 @@ pub async fn process_feeds_with_progress(
         let content = match response.bytes().await {
             Ok(bytes) => bytes,
             Err(e) => {
-                log::info!("Skipping {} - Failed to read feed content: {}", link_info.company, e);
+                log::warn!("Skipping {} - Failed to read feed content: {}", link_info.company, e);
                 company_progress.status = "skipped".to_string();
                 progress_sender.send(company_progress.into_event()).await?;
                 continue;
@@ -130,7 +130,7 @@ pub async fn process_feeds_with_progress(
         let feed = match parser::parse(&content[..]) {
             Ok(parsed_feed) => parsed_feed,
             Err(e) => {
-                log::info!("Skipping {} - Failed to parse feed: {}", link_info.company, e);
+                log::warn!("Skipping {} - Failed to parse feed: {}", link_info.company, e);
                 company_progress.status = "skipped".to_string();
                 progress_sender.send(company_progress.into_event()).await?;
                 continue;

@@ -1,19 +1,15 @@
 #[cfg(feature = "ssr")]
 pub mod jwt {
-    use super::super::types::{AuthError, AuthResponse, AUTH_COOKIE_NAME};
+    use super::super::types::{AuthError, AuthResponse, TokenClaims, TokenType};
+    use super::super::types::{ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME};
     use super::super::secure::verify_password;
     use axum_extra::extract::cookie::{Cookie, SameSite};
     use cookie::time;
     use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-    use serde::{Deserialize, Serialize};
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    #[derive(Debug, Serialize, Deserialize)]
-    struct Claims {
-        sub: String,
-        exp: usize,
-        iat: usize,
-    }
+    const ACCESS_TOKEN_DURATION: usize = 15 * 60;
+    const REFRESH_TOKEN_DURATION: usize = 7 * 24 * 60 * 60;
 
     pub async fn authenticate_admin(username: &str, password: &str) -> Result<bool, AuthError> {
         let admin_user = std::env::var("ADMIN_USERNAME")
@@ -38,7 +34,7 @@ pub mod jwt {
         }
     }
 
-    pub fn generate_token(username: String) -> Result<AuthResponse, AuthError> {
+    pub fn generate_tokens(username: String) -> Result<AuthResponse, AuthError> {
         let jwt_secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
 
         let now = SystemTime::now()
@@ -46,50 +42,128 @@ pub mod jwt {
             .unwrap()
             .as_secs() as usize;
 
-        let expires_in = 3600;
-
-        let claims = Claims {
-            sub: username,
-            exp: now + expires_in,
+        let access_claims = TokenClaims {
+            sub: username.clone(),
+            exp: now + ACCESS_TOKEN_DURATION,
             iat: now,
+            token_type: TokenType::Access,
         };
 
-        let token = encode(
+        let access_token = encode(
             &Header::default(),
-            &claims,
+            &access_claims,
             &EncodingKey::from_secret(jwt_secret.as_bytes())
         ).map_err(|e| AuthError::TokenCreation(e.to_string()))?;
 
-        Ok(AuthResponse { token, expires_in })
+        let refresh_claims = TokenClaims {
+            sub: username,
+            exp: now + REFRESH_TOKEN_DURATION,
+            iat: now,
+            token_type: TokenType::Refresh,
+        };
+
+        let refresh_token = encode(
+            &Header::default(),
+            &refresh_claims,
+            &EncodingKey::from_secret(jwt_secret.as_bytes())
+        ).map_err(|e| AuthError::TokenCreation(e.to_string()))?;
+
+        Ok(AuthResponse {
+            access_token,
+            refresh_token,
+            access_expires_in: ACCESS_TOKEN_DURATION,
+            refresh_expires_in: REFRESH_TOKEN_DURATION,
+        })
     }
 
-    pub fn create_auth_cookie(token: &str) -> Cookie<'static> {
-        Cookie::build((AUTH_COOKIE_NAME, token.to_owned()))
-            .path("/")
-            .secure(true)
-            .http_only(true)
-            .same_site(SameSite::Strict)
-            .expires(time::OffsetDateTime::now_utc() + time::Duration::hours(1))
-            .build()
+    pub fn create_auth_cookies(auth_response: &AuthResponse) -> Vec<Cookie<'static>> {
+        vec![
+            Cookie::build((ACCESS_COOKIE_NAME, auth_response.access_token.clone()))
+                .path("/")
+                .secure(true)
+                .http_only(true)
+                .same_site(SameSite::Strict)
+                .expires(time::OffsetDateTime::now_utc() + time::Duration::minutes(15))
+                .build(),
+
+            Cookie::build((REFRESH_COOKIE_NAME, auth_response.refresh_token.clone()))
+                .path("/")
+                .secure(true)
+                .http_only(true)
+                .same_site(SameSite::Strict)
+                .expires(time::OffsetDateTime::now_utc() + time::Duration::days(7))
+                .build()
+        ]
     }
 
-    pub fn verify_token(token: &str) -> Result<bool, AuthError> {
+    pub fn verify_and_refresh_tokens(
+        access_token: Option<&str>,
+        refresh_token: Option<&str>,
+    ) -> Result<Option<AuthResponse>, AuthError> {
+        log::debug!("Token verification started");
+        log::debug!("Access token present: {}", access_token.is_some());
+        log::debug!("Refresh token present: {}", refresh_token.is_some());
+
         let jwt_secret = std::env::var("JWT_SECRET")
             .map_err(|_| AuthError::MissingEnvironmentVar("JWT_SECRET".to_string()))?;
 
         let validation = Validation::default();
 
-        match decode::<Claims>(
-            token,
-            &DecodingKey::from_secret(jwt_secret.as_bytes()),
-            &validation
-        ) {
-            Ok(_) => Ok(true),
-            Err(e) => match e.kind() {
-                &jsonwebtoken::errors::ErrorKind::ExpiredSignature => Ok(false),
-                _ => Err(AuthError::TokenVerification(e.to_string()))
+        if let Some(token) = access_token {
+            log::debug!("Verifying access token");
+            match decode::<TokenClaims>(
+                token,
+                &DecodingKey::from_secret(jwt_secret.as_bytes()),
+                &validation
+            ) {
+                Ok(token_data) => {
+                    log::debug!("Access token decoded successfully");
+                    if token_data.claims.token_type != TokenType::Access {
+                        log::debug!("Invalid token type: expected Access");
+                        return Err(AuthError::TokenVerification("Invalid token type".to_string()));
+                    }
+                    log::debug!("Access token is valid");
+                    return Ok(None);
+                },
+                Err(e) => {
+                    log::debug!("Access token verification failed: {}", e);
+                    if e.kind() != &jsonwebtoken::errors::ErrorKind::ExpiredSignature {
+                        return Err(AuthError::TokenVerification(e.to_string()));
+                    }
+                    log::debug!("Access token expired, attempting refresh");
+                }
             }
         }
+
+        if let Some(token) = refresh_token {
+            log::debug!("Attempting token refresh");
+            match decode::<TokenClaims>(
+                token,
+                &DecodingKey::from_secret(jwt_secret.as_bytes()),
+                &validation
+            ) {
+                Ok(token_data) => {
+                    log::debug!("Refresh token decoded successfully");
+                    if token_data.claims.token_type != TokenType::Refresh {
+                        log::debug!("Invalid token type: expected Refresh");
+                        return Err(AuthError::TokenVerification("Invalid token type".to_string()));
+                    }
+
+                    log::debug!("Generating new tokens");
+                    let new_tokens = generate_tokens(token_data.claims.sub)?;
+                    log::debug!("New tokens generated successfully");
+                    Ok(Some(new_tokens))
+                },
+                Err(e) => {
+                    log::debug!("Refresh token verification failed: {}", e);
+                    Err(AuthError::TokenVerification(e.to_string()))
+                }
+            }
+        } else {
+            log::debug!("No refresh token available");
+            Err(AuthError::TokenExpired)
+        }
+
     }
 }
 
@@ -97,13 +171,13 @@ pub mod jwt {
 pub mod middleware {
     use axum::{
         body::Body,
-        http::Request,
+        http::{Request, HeaderValue, header},
         middleware::Next,
-        response::Response,
+        response::{Response, IntoResponse},
         http::StatusCode,
     };
-    use axum_extra::extract::cookie::CookieJar;
-    use super::super::types::AUTH_COOKIE_NAME;
+    use axum_extra::extract::cookie::{CookieJar, Cookie};
+    use super::super::types::{ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME};
     use super::jwt;
 
     pub async fn require_auth(
@@ -111,17 +185,70 @@ pub mod middleware {
         request: Request<Body>,
         next: Next,
     ) -> Result<Response, StatusCode> {
-        let token = cookie_jar
-            .get(AUTH_COOKIE_NAME)
-            .map(|cookie| cookie.value().to_string())
-            .ok_or(StatusCode::UNAUTHORIZED)?;
+        log::debug!(
+            "Auth middleware - Processing request to: {} {}",
+            request.method(),
+            request.uri()
+        );
 
-        match jwt::verify_token(&token) {
-            Ok(true) => {
-                let response = next.run(request).await;
+        let access_token = cookie_jar.get(ACCESS_COOKIE_NAME).map(|c| c.value().to_string());
+        let refresh_token = cookie_jar.get(REFRESH_COOKIE_NAME).map(|c| c.value().to_string());
+
+        log::debug!(
+            "Auth middleware - Found tokens - Access: {}, Refresh: {}",
+            access_token.is_some(),
+            refresh_token.is_some()
+        );
+
+        match jwt::verify_and_refresh_tokens(
+            access_token.as_deref(),
+            refresh_token.as_deref(),
+        ) {
+            Ok(maybe_new_tokens) => {
+                let mut response = next.run(request).await;
+
+                if let Some(new_tokens) = maybe_new_tokens {
+                    log::debug!("Auth middleware - Setting refreshed tokens in cookies");
+                    let cookies = jwt::create_auth_cookies(&new_tokens);
+                    for cookie in cookies {
+                        log::debug!("Auth middleware - Setting cookie: {}", cookie.name());
+                        if let Ok(cookie_value) = HeaderValue::from_str(&cookie.to_string()) {
+                            response.headers_mut()
+                                .append(header::SET_COOKIE, cookie_value);
+                        }
+                    }
+                } else {
+                    log::debug!("Auth middleware - Using existing valid tokens");
+                }
+
                 Ok(response)
             },
-            _ => Err(StatusCode::UNAUTHORIZED),
+            Err(e) => {
+                log::debug!("Auth middleware - Authentication failed: {:?}", e);
+
+                let mut response = StatusCode::UNAUTHORIZED.into_response();
+
+                log::debug!("Auth middleware - Clearing invalid cookies");
+                let expired_cookies = [
+                    Cookie::build((ACCESS_COOKIE_NAME, ""))
+                        .path("/")
+                        .expires(cookie::time::OffsetDateTime::now_utc())
+                        .build(),
+                    Cookie::build((REFRESH_COOKIE_NAME, ""))
+                        .path("/")
+                        .expires(cookie::time::OffsetDateTime::now_utc())
+                        .build(),
+                ];
+
+                for cookie in expired_cookies {
+                    if let Ok(cookie_value) = HeaderValue::from_str(&cookie.to_string()) {
+                        response.headers_mut()
+                            .append(header::SET_COOKIE, cookie_value);
+                    }
+                }
+
+                Err(StatusCode::UNAUTHORIZED)
+            }
         }
     }
 }
