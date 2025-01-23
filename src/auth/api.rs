@@ -9,7 +9,7 @@ pub async fn admin_login(username: String, password: String) -> Result<(), Serve
         use super::server::jwt;
         use http::{HeaderName, HeaderValue};
 
-        log::debug!("Attempting login for user: {}", username);
+        log::info!("Attempting login for user: {}", username);
 
         match jwt::authenticate_admin(&username, &password).await {
             Ok(true) => {
@@ -33,15 +33,13 @@ pub async fn admin_login(username: String, password: String) -> Result<(), Serve
                     );
                 }
 
-                log::debug!("Login successful, all cookies set");
+                log::info!("Login successful, all cookies set");
                 Ok(())
             }
             Ok(false) => {
-                log::debug!("Authentication failed: invalid credentials");
                 Err(to_server_error(AuthError::InvalidCredentials))
             },
             Err(e) => {
-                log::debug!("Authentication error: {:?}", e);
                 Err(to_server_error(e))
             },
         }
@@ -56,43 +54,29 @@ pub async fn admin_login(username: String, password: String) -> Result<(), Serve
 pub async fn logout() -> Result<(), ServerFnError> {
     #[cfg(feature = "ssr")]
     {
-        use super::types::{ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME, AuthError, to_server_error};
+        use super::types::{AuthError, to_server_error};
+        use super::server::jwt;
         use http::{HeaderName, HeaderValue};
-        use cookie::{Cookie, SameSite};
-        use cookie::time;
 
+        log::info!("Starting logout process");
+
+
+        let expired_cookies = jwt::create_expired_cookies();
         let response_options = use_context::<leptos_axum::ResponseOptions>()
             .expect("response options not found");
 
-        let expired_cookies = [
-            Cookie::build((ACCESS_COOKIE_NAME, ""))
-                .path("/")
-                .secure(true)
-                .http_only(true)
-                .same_site(SameSite::Strict)
-                .expires(time::OffsetDateTime::now_utc() - time::Duration::hours(1))
-                .build(),
-
-            Cookie::build((REFRESH_COOKIE_NAME, ""))
-                .path("/")
-                .secure(true)
-                .http_only(true)
-                .same_site(SameSite::Strict)
-                .expires(time::OffsetDateTime::now_utc() - time::Duration::hours(1))
-                .build(),
-        ];
-
 
         for cookie in expired_cookies {
+            log::debug!("Attempting to clear cookie with attributes: {:?}", cookie);
             let cookie_value = HeaderValue::from_str(&cookie.to_string())
                 .map_err(|e| to_server_error(AuthError::CookieError(e.to_string())))?;
-
             response_options.insert_header(
                 HeaderName::from_static("set-cookie"),
                 cookie_value
             );
         }
 
+        log::info!("Logout process completed");
         Ok(())
     }
 

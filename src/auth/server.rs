@@ -24,7 +24,7 @@ pub mod jwt {
     
         match verify_password(password, &stored_hash) {
             Ok(valid) => {
-                log::info!("Password verification result: {}", valid);
+                log::debug!("Password verification result: {}", valid);
                 Ok(valid)
             },
             Err(e) => {
@@ -76,23 +76,41 @@ pub mod jwt {
         })
     }
 
-    pub fn create_auth_cookies(auth_response: &AuthResponse) -> Vec<Cookie<'static>> {
-        vec![
-            Cookie::build((ACCESS_COOKIE_NAME, auth_response.access_token.clone()))
-                .path("/")
-                .secure(true)
-                .http_only(true)
-                .same_site(SameSite::Strict)
-                .expires(time::OffsetDateTime::now_utc() + time::Duration::minutes(15))
-                .build(),
+    pub fn create_cookie_with_attributes(
+        name: &'static str, 
+        value: String,
+        expires: time::OffsetDateTime,
+    ) -> Cookie<'static> {
+        Cookie::build((name, value))
+            .path("/")
+            .secure(true)
+            .http_only(true)
+            .same_site(SameSite::Strict)
+            .expires(expires)
+            .build()
+    }
 
-            Cookie::build((REFRESH_COOKIE_NAME, auth_response.refresh_token.clone()))
-                .path("/")
-                .secure(true)
-                .http_only(true)
-                .same_site(SameSite::Strict)
-                .expires(time::OffsetDateTime::now_utc() + time::Duration::days(7))
-                .build()
+    pub fn create_auth_cookies(auth_response: &AuthResponse) -> Vec<Cookie<'static>> {
+        let now = time::OffsetDateTime::now_utc();
+        vec![
+            create_cookie_with_attributes(
+                ACCESS_COOKIE_NAME,
+                auth_response.access_token.clone(),
+                now + time::Duration::minutes(15)
+            ),
+            create_cookie_with_attributes(
+                REFRESH_COOKIE_NAME,
+                auth_response.refresh_token.clone(),
+                now + time::Duration::days(7)
+            )
+        ]
+    }
+
+    pub fn create_expired_cookies() -> Vec<Cookie<'static>> {
+        let expired = time::OffsetDateTime::UNIX_EPOCH;
+        vec![
+            create_cookie_with_attributes(ACCESS_COOKIE_NAME, String::new(), expired),
+            create_cookie_with_attributes(REFRESH_COOKIE_NAME, String::new(), expired)
         ]
     }
 
@@ -103,6 +121,11 @@ pub mod jwt {
         log::debug!("Token verification started");
         log::debug!("Access token present: {}", access_token.is_some());
         log::debug!("Refresh token present: {}", refresh_token.is_some());
+
+        if refresh_token.is_none() {
+            log::debug!("No refresh token, considering session invalid");
+            return Err(AuthError::TokenExpired);
+        }
 
         let jwt_secret = std::env::var("JWT_SECRET")
             .map_err(|_| AuthError::MissingEnvironmentVar("JWT_SECRET".to_string()))?;
@@ -176,7 +199,7 @@ pub mod middleware {
         response::{Response, IntoResponse},
         http::StatusCode,
     };
-    use axum_extra::extract::cookie::{CookieJar, Cookie};
+    use axum_extra::extract::cookie::CookieJar;
     use super::super::types::{ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME};
     use super::jwt;
 
@@ -185,7 +208,7 @@ pub mod middleware {
         request: Request<Body>,
         next: Next,
     ) -> Result<Response, StatusCode> {
-        log::debug!(
+        log::info!(
             "Auth middleware - Processing request to: {} {}",
             request.method(),
             request.uri()
@@ -193,6 +216,13 @@ pub mod middleware {
 
         let access_token = cookie_jar.get(ACCESS_COOKIE_NAME).map(|c| c.value().to_string());
         let refresh_token = cookie_jar.get(REFRESH_COOKIE_NAME).map(|c| c.value().to_string());
+
+        if let Some(access) = &access_token {
+            log::debug!("Middleware received access cookie: {:?}", access);
+        }
+        if let Some(refresh) = &refresh_token {
+            log::debug!("Middleware received refresh cookie: {:?}", refresh);
+        }
 
         log::debug!(
             "Auth middleware - Found tokens - Access: {}, Refresh: {}",
@@ -225,21 +255,10 @@ pub mod middleware {
             },
             Err(e) => {
                 log::debug!("Auth middleware - Authentication failed: {:?}", e);
-
                 let mut response = StatusCode::UNAUTHORIZED.into_response();
-
                 log::debug!("Auth middleware - Clearing invalid cookies");
-                let expired_cookies = [
-                    Cookie::build((ACCESS_COOKIE_NAME, ""))
-                        .path("/")
-                        .expires(cookie::time::OffsetDateTime::now_utc())
-                        .build(),
-                    Cookie::build((REFRESH_COOKIE_NAME, ""))
-                        .path("/")
-                        .expires(cookie::time::OffsetDateTime::now_utc())
-                        .build(),
-                ];
 
+                let expired_cookies = jwt::create_expired_cookies();
                 for cookie in expired_cookies {
                     if let Ok(cookie_value) = HeaderValue::from_str(&cookie.to_string()) {
                         response.headers_mut()
