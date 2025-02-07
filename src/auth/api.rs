@@ -9,7 +9,7 @@ pub async fn admin_login(username: String, password: String) -> Result<(), Serve
         use super::server::jwt;
         use http::{HeaderName, HeaderValue};
 
-        log::info!("Attempting login for user: {}", username);
+        log::debug!("Attempting login for user: {}", username);
 
         match jwt::authenticate_admin(&username, &password).await {
             Ok(true) => {

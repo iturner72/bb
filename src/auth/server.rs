@@ -217,13 +217,6 @@ pub mod middleware {
         let access_token = cookie_jar.get(ACCESS_COOKIE_NAME).map(|c| c.value().to_string());
         let refresh_token = cookie_jar.get(REFRESH_COOKIE_NAME).map(|c| c.value().to_string());
 
-        if let Some(access) = &access_token {
-            log::debug!("Middleware received access cookie: {:?}", access);
-        }
-        if let Some(refresh) = &refresh_token {
-            log::debug!("Middleware received refresh cookie: {:?}", refresh);
-        }
-
         log::debug!(
             "Auth middleware - Found tokens - Access: {}, Refresh: {}",
             access_token.is_some(),

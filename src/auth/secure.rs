@@ -7,7 +7,7 @@ use argon2::{
 pub fn verify_password(password: &str, hash_b64: &str) -> Result<bool, String> {
     use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
 
-    log::info!("Attempting to verify password");
+    log::debug!("Attempting to verify password");
 
     // Decode base64 hash
     let hash = String::from_utf8(

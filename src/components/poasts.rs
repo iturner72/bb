@@ -38,7 +38,7 @@ pub struct Links {
 #[server(GetCompanies, "/api")]
 pub async fn get_companies() -> Result<Vec<String>, ServerFnError> {
     use crate::supabase::get_client;
-    use log::{info, error};
+    use log::{debug, error};
     use std::fmt;
 
     #[derive(Debug)]
@@ -92,7 +92,7 @@ pub async fn get_companies() -> Result<Vec<String>, ServerFnError> {
     company_names.sort();
     company_names.dedup();
 
-    info!("Successfully fetched {} companies", company_names.len());
+    debug!("Successfully fetched {} companies", company_names.len());
     Ok(company_names)
 }
 
@@ -107,7 +107,7 @@ pub async fn get_poasts(filter: Option<PostFilter>) -> Result<Vec<Poast>, Server
     use crate::supabase::get_client;
     use serde_json::from_str;
     use std::fmt;
-    use log::{info, error};
+    use log::{debug, info, error};
     use std::time::Instant;
     use crate::server_fn::cache::{POASTS_CACHE, CACHE_DURATION};
 
@@ -156,7 +156,7 @@ pub async fn get_poasts(filter: Option<PostFilter>) -> Result<Vec<Poast>, Server
     if let Some(ref filter) = filter {
         if let Some(ref term) = filter.search_term {
             if !term.trim().is_empty() {
-                info!("Searching for term: {}", term);
+                debug!("Searching for term: {}", term);
                 request = request.or(format!(
                         "title.ilike.%{}%,summary.ilike.%{}%",
                         term, term
@@ -165,10 +165,10 @@ pub async fn get_poasts(filter: Option<PostFilter>) -> Result<Vec<Poast>, Server
         }
 
         if let Some(ref company) = filter.company.clone().filter(|c| !c.trim().is_empty()) {
-            info!("Filtering by company: {}", company);
+            debug!("Filtering by company: {}", company);
             request = request.eq("company", company);
         } else {
-            info!("No company filter applied - showing all companies");
+            debug!("No company filter applied - showing all companies");
         }
     }
 
@@ -180,15 +180,15 @@ pub async fn get_poasts(filter: Option<PostFilter>) -> Result<Vec<Poast>, Server
             PoastError::RequestError(e.to_string())
         }).map_err(to_server_error)?;
 
-    info!("received response from Supabase");
-    info!("response status: {:?}", response.status());
+    debug!("received response from Supabase");
+    debug!("response status: {:?}", response.status());
     
     let body = response.text().await.map_err(|e| {
         error!("error reading response body: {}", e);
         PoastError::RequestError(e.to_string())
     }).map_err(to_server_error)?;
 
-    info!("response body length: {}", body.len());
+    debug!("response body length: {}", body.len());
 
     if body.trim().is_empty() {
         error!("empty response from Supabase");
@@ -222,7 +222,7 @@ pub fn Poasts() -> impl IntoView {
         move || {
             let search = search_input.get();
             let company = selected_company.get();
-            
+
             console_log!("Filter changed - search: '{}', company: '{}'", search, company);
             
             (search, company)
@@ -238,86 +238,102 @@ pub fn Poasts() -> impl IntoView {
 
     view! {
         <div class="pt-4 space-y-4">
-            <BlogSearch on_search=set_search_input/>
+            <BlogSearch on_search=set_search_input />
 
             <Suspense fallback=|| view! { <div class="pl-4 h-10"></div> }>
                 <div class="flex justify-start mb-2 pl-4">
                     {move || {
-                        companies.get().map(|companies_result| {
-                            let selected = selected_company.get();
-                            match companies_result {
-                                Ok(companies) => {
-                                    view! {
-                                        <>
-                                            <select
-                                                on:change=move |ev| set_selected_company(event_target_value(&ev))
-                                                class="w-52 p-2 rounded-md bg-gray-100 dark:bg-teal-800 text-gray-800 dark:text-gray-200 
-                                                       border border-teal-500 dark:border-seafoam-500 
-                                                       focus:border-seafoam-600 dark:focus:border-aqua-400 
-                                                       focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400"
-                                            >
-                                                <option value="">"All Companies"</option>
-                                                {companies.into_iter()
-                                                    .map(|company| {
-                                                        view! {
-                                                            <option 
-                                                                value={company.clone()}
-                                                                selected={selected == company}
-                                                            >
-                                                                {company.clone()}
-                                                            </option>
-                                                        }
-                                                    })
-                                                    .collect_view()
-                                                }
-                                            </select>
-                                        </>
-                                    }.into_any()
+                        companies
+                            .get()
+                            .map(|companies_result| {
+                                let selected = selected_company.get();
+                                match companies_result {
+                                    Ok(companies) => {
+                                        view! {
+                                            <>
+                                                <select
+                                                    on:change=move |ev| set_selected_company(
+                                                        event_target_value(&ev),
+                                                    )
+                                                    class="w-52 p-2 rounded-md bg-gray-100 dark:bg-teal-800 text-gray-800 dark:text-gray-200 
+                                                    border border-teal-500 dark:border-seafoam-500 
+                                                    focus:border-seafoam-600 dark:focus:border-aqua-400 
+                                                    focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400"
+                                                >
+                                                    <option value="">"All Companies"</option>
+                                                    {companies
+                                                        .into_iter()
+                                                        .map(|company| {
+                                                            view! {
+                                                                <option value=company.clone() selected=selected == company>
+                                                                    {company.clone()}
+                                                                </option>
+                                                            }
+                                                        })
+                                                        .collect_view()}
+                                                </select>
+                                            </>
+                                        }
+                                            .into_any()
+                                    }
+                                    Err(_) => {
+                                        view! {
+                                            <>
+                                                <div></div>
+                                            </>
+                                        }
+                                            .into_any()
+                                    }
                                 }
-                                Err(_) => view! { <><div></div></> }.into_any()
-                            }
-                        })
+                            })
                     }}
                 </div>
             </Suspense>
 
-            <Suspense fallback=|| view! { <p class="text-center text-teal-600 dark:text-aqua-400">"Loading..."</p> }>
+            <Suspense fallback=|| {
+                view! { <p class="text-center text-teal-600 dark:text-aqua-400">"Loading..."</p> }
+            }>
                 {move || {
                     match poasts.get() {
                         Some(Ok(posts)) => {
                             if posts.is_empty() {
-                                view! { 
+                                view! {
                                     <div class="text-center text-gray-500 dark:text-gray-400">
                                         "No posts found"
-                                    </div> 
-                                }.into_any()
+                                    </div>
+                                }
+                                    .into_any()
                             } else {
                                 view! {
                                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                         <For
                                             each=move || posts.clone()
                                             key=|poast| poast.id
-                                            children=move |poast| view! { 
-                                                <BlogPoast 
-                                                    poast=poast 
-                                                    search_term=search_input.get()
-                                                /> 
+                                            children=move |poast| {
+                                                view! {
+                                                    <BlogPoast poast=poast search_term=search_input.get() />
+                                                }
                                             }
                                         />
                                     </div>
-                                }.into_any()
+                                }
+                                    .into_any()
                             }
-                        },
-                        Some(Err(_)) => view! {
-                            <div class="text-center text-red-500">
-                                "Error loading posts"
-                            </div>
-                        }.into_any(),
-                        None => view! {
-                            <div class="text-center text-gray-500 dark:text-gray-400">
-                                "Loading..."
-                            </div>
-                        }.into_any(),
+                        }
+                        Some(Err(_)) => {
+                            view! {
+                                <div class="text-center text-red-500">"Error loading posts"</div>
+                            }
+                                .into_any()
+                        }
+                        None => {
+                            view! {
+                                <div class="text-center text-gray-500 dark:text-gray-400">
+                                    "Loading..."
+                                </div>
+                            }
+                                .into_any()
+                        }
                     }
                 }}
             </Suspense>
@@ -343,9 +359,9 @@ pub fn BlogPoast(
     view! {
         <div class="relative p-4">
             <article class="base-poast flex flex-col items-start h-full w-full bg-white dark:bg-teal-800 border-2 border-gray-200 dark:border-teal-700 hover:border-seafoam-500 dark:hover:border-aqua-500 p-4 rounded-lg shadow-md hover:shadow-lg transition-all">
-                {/* Clickable header section */}
-                <a 
-                    href={poast.link.clone()}
+                {}
+                <a
+                    href=poast.link.clone()
                     class="block w-full"
                     target="_blank"
                     rel="noopener noreferrer"
@@ -353,13 +369,19 @@ pub fn BlogPoast(
                     <div class="flex items-center pb-2 max-w-1/2">
                         {move || {
                             let company_val = company.get();
-                            poast.links.clone().and_then(|links| links.logo_url).map(|url| view! {
-                                <img 
-                                    src={url} 
-                                    alt={format!("{} logo", company_val)} 
-                                    class="w-8 h-8 mr-2 rounded-sm" 
-                                />
-                            })
+                            poast
+                                .links
+                                .clone()
+                                .and_then(|links| links.logo_url)
+                                .map(|url| {
+                                    view! {
+                                        <img
+                                            src=url
+                                            alt=format!("{} logo", company_val)
+                                            class="w-8 h-8 mr-2 rounded-sm"
+                                        />
+                                    }
+                                })
                         }}
                         <h2 class="text-sm md:text-base lg:text-lg text-teal-600 dark:text-mint-400 font-semibold truncate">
                             {move || company.get()}
@@ -377,34 +399,36 @@ pub fn BlogPoast(
                             {poast.published_at.clone()}
                         </p>
                     </div>
-                </a>
-                {/* Non-clickable summary section */}
+                </a> {}
                 <div class="poast-summary mt-2 w-full">
-                    {move || poast.summary.clone().map(|summary| view! {
-                        <div>
-                            <HighlightedText
-                                text=Cow::from(summary)
-                                search_term=search_term.clone()
-                                class={
-                                    if is_expanded() {
-                                        "text-xs md:text-sm lg:text-base text-gray-600 dark:text-gray-300"
-                                    } else {
-                                        "text-xs md:text-sm lg:text-base text-gray-600 dark:text-gray-300 line-clamp-2 md:line-clamp-3 lg:line-clamp-4"
-                                    }
+                    {move || {
+                        poast
+                            .summary
+                            .clone()
+                            .map(|summary| {
+                                view! {
+                                    <div>
+                                        <HighlightedText
+                                            text=Cow::from(summary)
+                                            search_term=search_term.clone()
+                                            class=if is_expanded() {
+                                                "text-xs md:text-sm lg:text-base text-gray-600 dark:text-gray-300"
+                                            } else {
+                                                "text-xs md:text-sm lg:text-base text-gray-600 dark:text-gray-300 line-clamp-2 md:line-clamp-3 lg:line-clamp-4"
+                                            }
+                                        />
+                                        <button
+                                            on:click=handle_show_more
+                                            class="mt-2 text-xs md:text-sm text-seafoam-600 dark:text-aqua-400 hover:text-seafoam-700 dark:hover:text-aqua-300 transition-colors"
+                                        >
+                                            {move || {
+                                                if is_expanded() { "Show Less" } else { "Show More" }
+                                            }}
+                                        </button>
+                                    </div>
                                 }
-                            />
-                            <button
-                                on:click=handle_show_more
-                                class="mt-2 text-xs md:text-sm text-seafoam-600 dark:text-aqua-400 hover:text-seafoam-700 dark:hover:text-aqua-300 transition-colors"
-                            >
-                                {move || if is_expanded() {
-                                    "Show Less"
-                                } else {
-                                    "Show More"
-                                }}
-                            </button>
-                        </div>
-                    })}
+                            })
+                    }}
                 </div>
             </article>
         </div>
@@ -454,20 +478,22 @@ fn HighlightedText<'a>(
     let segments = get_highlighted_segments(&text, &search_term);
 
     view! {
-        <span class={class}>
-            {segments.into_iter().map(|(text, is_highlight)| {
-                if is_highlight {
-                    view! {
-                        <mark class="bg-mint-400 dark:bg-mint-900 text-seafoam-900 dark:text-seafoam-200 rounded px-0.5">
-                            {text}
-                        </mark>
-                    }.into_any()
-                } else {
-                    view! { 
-                        <span>{text}</span> 
-                    }.into_any()
-                }
-            }).collect_view()}
+        <span class=class>
+            {segments
+                .into_iter()
+                .map(|(text, is_highlight)| {
+                    if is_highlight {
+                        view! {
+                            <mark class="bg-mint-400 dark:bg-mint-900 text-seafoam-900 dark:text-seafoam-200 rounded px-0.5">
+                                {text}
+                            </mark>
+                        }
+                            .into_any()
+                    } else {
+                        view! { <span>{text}</span> }.into_any()
+                    }
+                })
+                .collect_view()}
         </span>
     }
 }
