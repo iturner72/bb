@@ -1,17 +1,18 @@
 pub mod app;
-pub mod error_template;
-pub mod state;
-pub mod supabase;
-pub mod components;
-pub mod rss_service;
-pub mod backfill_service;
-pub mod summary_refresh_service;
 pub mod auth;
-pub mod server_fn;
-pub mod handlers;
-pub mod types;
+pub mod backfill_service;
 #[cfg(feature = "ssr")]
 pub mod cancellable_sse;
+pub mod components;
+pub mod embedding_service;
+pub mod error_template;
+pub mod handlers;
+pub mod rss_service;
+pub mod server_fn;
+pub mod state;
+pub mod summary_refresh_service;
+pub mod supabase;
+pub mod types;
 
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]
