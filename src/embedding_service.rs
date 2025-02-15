@@ -107,17 +107,68 @@ pub async fn generate_embeddings(
 
     if cancel_token.is_cancelled() {
         info!("Embedding generation cancelled before starting");
+        return Ok(())
     }
 
-    // posts w/o embeddings
-    let response = supabase
-        .from("poasts")
-        .select("link, title, summary, full_text")
-        .not("link", "in", "(SELECT link FROM post_embeddings)")
+    let embeddings_response = supabase
+        .from("post_embeddings")
+        .select("link")
         .execute()
         .await?;
 
-    let posts: Vec<Poast> = serde_json::from_str(&response.text().await?)?;
+    let embeddings_text = embeddings_response.text().await?;
+    let embeddings_value: serde_json::Value = serde_json::from_str(&embeddings_text)?;
+    
+    let existing_links: Vec<String> = if let serde_json::Value::Array(arr) = embeddings_value {
+        arr.iter()
+            .filter_map(|v| v.get("link"))
+            .filter_map(|v| v.as_str())
+            .map(String::from)
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    info!("Found {} existing embeddings", existing_links.len());
+
+    let posts_response = if !existing_links.is_empty() {
+        let filter_conditions = existing_links
+            .iter()
+            .map(|link| format!("link.neq.{}", link))
+            .collect::<Vec<_>>()
+            .join(",");
+    
+        info!("Using filter conditions: {}", filter_conditions);
+    
+        supabase
+            .from("poasts")
+            .select("*")
+            .or(&filter_conditions)
+    } else {
+        supabase
+            .from("poasts")
+            .select("*")
+    };
+
+    let response = posts_response.execute().await?;
+    let response_text = response.text().await?.to_string();
+    
+    info!("Supabase posts response: {}", response_text);
+
+    let posts_value: serde_json::Value = serde_json::from_str(&response_text)?;
+    let posts: Vec<Poast> = if let serde_json::Value::Array(arr) = posts_value {
+        arr.iter()
+            .filter_map(|v| {
+                let result = serde_json::from_value(v.clone());
+                if let Err(ref e) = result {
+                    error!("Failed to parse post: {}", e);
+                }
+                result.ok()
+            })
+            .collect()
+    } else {
+        return Err("Expected array response from Supabase".into());
+    };
 
     info!("Found {} posts needing embeddings", posts.len());
 

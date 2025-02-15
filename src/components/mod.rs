@@ -1,8 +1,9 @@
-pub mod poasts;
-pub mod dark_mode_toggle;
-pub mod footer;
+pub mod auth_nav;
 pub mod batch_processor;
-pub mod summary_refresh_processor;
+pub mod dark_mode_toggle;
+pub mod embeddings;
+pub mod footer;
+pub mod poasts;
 pub mod rss_test;
 pub mod search;
-pub mod auth_nav;
+pub mod summary_refresh_processor;
