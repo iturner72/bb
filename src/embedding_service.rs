@@ -6,7 +6,6 @@ use async_openai::{
     Client,
 };
 use leptos::prelude::*;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
 use std::{collections::HashMap, convert::Infallible};
@@ -16,76 +15,6 @@ use log::{info, error};
 
 use crate::components::poasts::Poast;
 use crate::server_fn::{invalidate_poasts_cache, RssProgressUpdate};
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PostEmbedding {
-    link: String,
-    embedding: Vec<f32>,
-}
-
-#[server(SearchPosts, "/api")]
-pub async fn semantic_search(query:String) -> Result<Vec<Poast>, ServerFnError> {
-    let openai = Client::new();
-
-    let query_embedding = openai
-        .embeddings()
-        .create(CreateEmbeddingRequestArgs::default()
-            .model("text-embedding-3-small")
-            .input(EmbeddingInput::String(query))
-            .build()?)
-        .await?
-        .data[0]
-        .embedding
-        .clone();
-
-    let supabase = crate::supabase::get_client();
-    let response = supabase
-        .from("post embeddings")
-        .select("*")
-        .execute()
-        .await?;
-
-    let embeddings: Vec<PostEmbedding> = serde_json::from_str(&response.text().await?)?;
-
-    let mut results: Vec<(String, f32)> = embeddings
-        .into_iter()
-        .map(|post| {
-            let similarity = cosine_similarity(&query_embedding, &post.embedding);
-            (post.link, similarity)
-        })
-        .collect();
-
-    results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-
-    let links: Vec<String> = results.iter()
-        .take(10)
-        .map(|(link, _)| link.clone())
-        .collect();
-
-    let posts_response = supabase
-        .from("poasts")
-        .select("*")
-        .in_("link", &links)
-        .execute()
-        .await?;
-
-    let mut posts: Vec<Poast> = serde_json::from_str(&posts_response.text().await?)?;
-
-    posts.sort_by(|a, b| {
-        let a_score = results.iter().find(|(l, _)| l == &a.link).unwrap().1;
-        let b_score = results.iter().find(|(l, _)| l == &b.link).unwrap().1;
-        b_score.partial_cmp(&a_score).unwrap()
-    });
-
-    Ok(posts)
-}
-
-fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    let dot_product: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
-    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-    dot_product / (norm_a * norm_b)
-}
 
 // will need to run this in supabase
 const _MIGRATION_SQL: &str = r#"
@@ -278,6 +207,8 @@ pub async fn generate_embeddings(
 #[cfg(feature = "ssr")]
 // code smell will call this with an CLI binary (first time i've worked with vector extension in
 // supabase, it worked first try) will remove this, or consider alternative methods for calling.
+//
+// I might keep this for testing new models later.
 pub async fn test_single_embedding() -> Result<(), Box<dyn std::error::Error>> {
     use async_openai::{
         types::{CreateEmbeddingRequestArgs, EmbeddingInput},

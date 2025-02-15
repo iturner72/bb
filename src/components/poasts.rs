@@ -1,7 +1,8 @@
 use leptos::prelude::*;
 use serde::{Serialize, Deserialize};
 use std::borrow::Cow;
-use crate::components::search::BlogSearch;
+
+use crate::components::search::{BlogSearch, SearchParams};
 
 #[cfg(feature = "hydrate")]
 macro_rules! console_log {
@@ -213,32 +214,58 @@ pub async fn get_poasts(filter: Option<PostFilter>) -> Result<Vec<Poast>, Server
 
 #[component]
 pub fn Poasts() -> impl IntoView {
-    let (search_input, set_search_input) = signal(String::new());
+    let (search_params, set_search_params) = signal(SearchParams {
+        query: String::new(),
+        is_semantic: false,
+    });
     let (selected_company, set_selected_company) = signal(String::new());
 
     let companies = Resource::new(|| (), |_| get_companies());
 
     let poasts = Resource::new(
         move || {
-            let search = search_input.get();
+            let params = search_params.get();
             let company = selected_company.get();
 
-            console_log!("Filter changed - search: '{}', company: '{}'", search, company);
+            console_log!(
+                "Filter changed - search: '{}', semantic: {}, company: '{}'", 
+                params.query, 
+                params.is_semantic,
+                company
+            );
             
-            (search, company)
+            (params, company)
         },
-        move |(search, company)| {
-            let filter = PostFilter {
-                search_term: if search.trim().is_empty() { None } else { Some(search) },
-                company: if company.trim().is_empty() { None } else { Some(company) },
-            };
-            get_poasts(Some(filter))
+        move |(params, company)| async move {
+            if params.is_semantic && !params.query.trim().is_empty() {
+                // For semantic search, first get results then filter by company if needed
+                let semantic_results = semantic_search(params.query).await?;
+                if company.trim().is_empty() {
+                    Ok(semantic_results)
+                } else {
+                    Ok(semantic_results
+                        .into_iter()
+                        .filter(|post| post.company == company)
+                        .collect())
+                }
+            } else {
+                // For traditional search, use the existing filter mechanism
+                let filter = PostFilter {
+                    search_term: if params.query.trim().is_empty() { None } else { Some(params.query) },
+                    company: if company.trim().is_empty() { None } else { Some(company) },
+                };
+                get_poasts(Some(filter)).await
+            }
         }
     );
 
+    let on_search = Callback::new(move |new_params: SearchParams| {
+        set_search_params.set(new_params);
+    });
+
     view! {
         <div class="pt-4 space-y-4">
-            <BlogSearch on_search=set_search_input />
+            <BlogSearch on_search=on_search />
 
             <Suspense fallback=|| view! { <div class="pl-4 h-10"></div> }>
                 <div class="flex justify-start mb-2 pl-4">
@@ -311,7 +338,10 @@ pub fn Poasts() -> impl IntoView {
                                             key=|poast| poast.id
                                             children=move |poast| {
                                                 view! {
-                                                    <BlogPoast poast=poast search_term=search_input.get() />
+                                                    <BlogPoast
+                                                        poast=poast
+                                                        search_term=search_params.get().query
+                                                    />
                                                 }
                                             }
                                         />
@@ -337,7 +367,6 @@ pub fn Poasts() -> impl IntoView {
                     }
                 }}
             </Suspense>
-
         </div>
     }
 }
@@ -497,3 +526,79 @@ fn HighlightedText<'a>(
         </span>
     }
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PostEmbedding {
+    link: String,
+    embedding: Vec<f32>,
+}
+
+#[server(SearchPosts, "/api")]
+pub async fn semantic_search(query:String) -> Result<Vec<Poast>, ServerFnError> {
+    use async_openai::{
+        types::{CreateEmbeddingRequestArgs, EmbeddingInput},
+        Client,
+    };
+    let openai = Client::new();
+
+    let query_embedding = openai
+        .embeddings()
+        .create(CreateEmbeddingRequestArgs::default()
+            .model("text-embedding-3-small")
+            .input(EmbeddingInput::String(query))
+            .build()?)
+        .await?
+        .data[0]
+        .embedding
+        .clone();
+
+    let supabase = crate::supabase::get_client();
+    let response = supabase
+        .from("post embeddings")
+        .select("*")
+        .execute()
+        .await?;
+
+    let embeddings: Vec<PostEmbedding> = serde_json::from_str(&response.text().await?)?;
+
+    let mut results: Vec<(String, f32)> = embeddings
+        .into_iter()
+        .map(|post| {
+            let similarity = cosine_similarity(&query_embedding, &post.embedding);
+            (post.link, similarity)
+        })
+        .collect();
+
+    results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+    let links: Vec<String> = results.iter()
+        .take(10)
+        .map(|(link, _)| link.clone())
+        .collect();
+
+    let posts_response = supabase
+        .from("poasts")
+        .select("*")
+        .in_("link", &links)
+        .execute()
+        .await?;
+
+    let mut posts: Vec<Poast> = serde_json::from_str(&posts_response.text().await?)?;
+
+    posts.sort_by(|a, b| {
+        let a_score = results.iter().find(|(l, _)| l == &a.link).unwrap().1;
+        let b_score = results.iter().find(|(l, _)| l == &b.link).unwrap().1;
+        b_score.partial_cmp(&a_score).unwrap()
+    });
+
+    Ok(posts)
+}
+
+#[cfg(feature = "ssr")]
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    let dot_product: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    dot_product / (norm_a * norm_b)
+}
+
