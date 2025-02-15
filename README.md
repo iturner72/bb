@@ -93,5 +93,5 @@ This template itself is released under the Unlicense. You should replace the LIC
 helper embedding command to test single embedding (if there exists a post
 without one)
 ```bash
-RUST_LOG=debug cargo run --bin test_embedding --features ssr```
+RUST_LOG=debug cargo run --bin test_embedding --features ssr
 ```

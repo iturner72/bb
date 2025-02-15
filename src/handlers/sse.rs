@@ -36,6 +36,20 @@ pub async fn create_stream(
     Json(StreamResponse { stream_id })
 }
 
+pub async fn embeddings_generation_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Sse<CancellableSseStream> {
+    let stream_id = params
+        .get("stream_id")
+        .cloned()
+        .expect("stream_id is required");
+
+    create_cancellable_sse_stream(state.sse_state, stream_id, |tx, token| async move {
+        crate::embedding_service::embeddings::generate_embeddings(tx, token).await
+    }).await
+}
+
 pub async fn rss_progress_handler(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,

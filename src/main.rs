@@ -62,6 +62,7 @@ cfg_if! {
                 .route("/api/rss-progress", get(rss_progress_handler))
                 .route("/api/backfill-progress", get(backfill_progress_handler))
                 .route("/api/refresh-summaries", get(refresh_summaries_handler))
+                .route("/api/generate-embeddings", get(embeddings_handler))
                 .layer(middleware::from_fn(require_auth));
 
             let app = Router::new()

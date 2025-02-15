@@ -8,8 +8,14 @@ use async_openai::{
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tokio_util::sync::CancellationToken;
+use std::{collections::HashMap, convert::Infallible};
+use axum::response::sse::Event;
+use std::error::Error;
+use log::{info, error};
 
 use crate::components::poasts::Poast;
+use crate::server_fn::{invalidate_poasts_cache, RssProgressUpdate};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PostEmbedding {
@@ -90,9 +96,18 @@ CREATE TABLE post_embeddings (
 CREATE INDEX ON post_embeddings USING ivfflat (embedding vector_cosine_ops);
 "#;
 
-pub async fn generate_embeddings() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn generate_embeddings(
+    progress_sender: tokio::sync::mpsc::Sender<Result<Event, Infallible>>,
+    cancel_token: CancellationToken,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    info!("Starting embeddings generation process");
     let openai = Client::new();
     let supabase = crate::supabase::get_client();
+    let mut company_states: HashMap<String, RssProgressUpdate> = HashMap::new();
+
+    if cancel_token.is_cancelled() {
+        info!("Embedding generation cancelled before starting");
+    }
 
     // posts w/o embeddings
     let response = supabase
@@ -104,35 +119,108 @@ pub async fn generate_embeddings() -> Result<(), Box<dyn std::error::Error>> {
 
     let posts: Vec<Poast> = serde_json::from_str(&response.text().await?)?;
 
-    for post in posts {
+    info!("Found {} posts needing embeddings", posts.len());
+
+    for (index, post) in posts.iter().enumerate() {
+
+        if cancel_token.is_cancelled() {
+            info!("Embeddings generation cancelled after {} posts", index);
+            return Ok(());
+        }
+
+        let company_progress = company_states 
+            .entry(post.company.clone())
+            .or_insert(RssProgressUpdate {
+                company: post.company.clone(),
+                status: "processing".to_string(),
+                new_posts: 0,
+                skipped_posts: 0,
+                current_post: Some(post.title.clone()),
+            });
+
+        info!(
+            "Processing post {}/{}: '{}' from {}",
+            index + 1, posts.len(), post.title, post.company
+        );
+
+        company_progress.current_post = Some(post.title.clone());
+        company_progress.status = "generating embedding".to_string();
+
+        progress_sender.send(company_progress.clone().into_event())
+            .await
+            .map_err(|e| format!("Failed to send progress update: {}", e))?;
+
         let text = format!(
             "{}\n{}\n{}",
             post.title,
-            post.summary.unwrap_or_default(),
-            post.full_text.unwrap_or_default()
+            post.summary.as_deref().unwrap_or(""),
+            post.full_text.as_deref().unwrap_or(""),
         );
 
-        let embedding = openai
+        match openai
             .embeddings()
             .create(CreateEmbeddingRequestArgs::default()
                 .model("text-embedding-3-small")
                 .input(EmbeddingInput::String(text))
                 .build()?)
-            .await?
-            .data[0]
-            .embedding
-            .clone();
+            .await
+        {
+            Ok(embedding_response) => {
+                company_progress.status = "storing".to_string();
+                progress_sender.send(company_progress.clone().into_event())
+                    .await
+                    .map_err(|e| format!("Failed to send progress update: {}", e))?;
 
-        supabase
-            .from("post_embeddings")
-            .insert(serde_json::to_string(&json!({
-                "link": post.link,
-                "embedding": embedding
-            }))?)
-            .execute()
-            .await?;
+                match supabase
+                    .from("post_embeddings")
+                    .insert(serde_json::to_string(&json!({
+                        "link": post.link,
+                        "embedding": embedding_response.data[0].embedding
+                    }))?)
+                    .execute()
+                    .await
+                {
+                    Ok(_) => {
+                        company_progress.new_posts += 1;
+                        info!("Successfully stored embedding for '{}'", post.title);
+                    },
+                    Err(e) => {
+                        error!("Failed to store embedding for '{}': {}", post.title, e);
+                        company_progress.skipped_posts += 1;
+                    }
+                }
+            },
+            Err(e) => {
+                error!("Failed to generate embedding for '{}': {}", post.title, e);
+                company_progress.skipped_posts += 1;
+            }
+        }
+
+        progress_sender.send(company_progress.clone().into_event())
+            .await
+            .map_err(|e| format!("Failed to send progress update: {}", e))?;
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
     }
 
+    for (_, progress) in company_states.iter_mut() {
+        progress.status = "completed".to_string();
+        progress.current_post = None;
+        progress_sender.send(progress.clone().into_event())
+            .await
+            .map_err(|e| format!("Failed to send final progress update: {}", e))?;
+    }
+
+    invalidate_poasts_cache().await.map_err(|e| {
+        Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn Error + Send + Sync>
+    })?;
+
+    progress_sender
+        .send(Ok(Event::default().data("[DONE]")))
+        .await
+        .map_err(|e| format!("Failed to send completion signal: {}", e))?;
+
+    info!("Embeddings generation completed successfully");
     Ok(())
 } 
 
