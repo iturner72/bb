@@ -527,20 +527,96 @@ fn HighlightedText<'a>(
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct PostEmbedding {
-    link: String,
-    embedding: Vec<f32>,
+#[derive(Debug, Serialize)]
+pub struct PostEmbedding {
+    pub link: String,
+    pub embedding: Vec<f32>,
+}
+
+impl<'de> Deserialize<'de> for PostEmbedding {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>
+    {
+        use serde::de::{self, MapAccess, Visitor};
+        use std::fmt;
+
+        #[derive(Deserialize)]
+        #[serde(field_identifier, rename_all = "lowercase")]
+        enum Field { Link, Embedding }
+
+        struct PostEmbeddingVisitor;
+
+        impl<'de> Visitor<'de> for PostEmbeddingVisitor {
+            type Value = PostEmbedding;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct PostEmbedding")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<PostEmbedding, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut link = None;
+                let mut embedding = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Link => {
+                            if link.is_some() {
+                                return Err(de::Error::duplicate_field("link"));
+                            }
+                            link = Some(map.next_value()?);
+                        }
+                        Field::Embedding => {
+                            if embedding.is_some() {
+                                return Err(de::Error::duplicate_field("embedding"));
+                            }
+                            // Parse the embedding string into Vec<f32>
+                            let embedding_str: String = map.next_value()?;
+                            let parsed_embedding = parse_embedding_string(&embedding_str)
+                                .map_err(de::Error::custom)?;
+                            embedding = Some(parsed_embedding);
+                        }
+                    }
+                }
+
+                let link = link.ok_or_else(|| de::Error::missing_field("link"))?;
+                let embedding = embedding.ok_or_else(|| de::Error::missing_field("embedding"))?;
+
+                Ok(PostEmbedding { link, embedding })
+            }
+        }
+
+        const FIELDS: &[&str] = &["link", "embedding"];
+        deserializer.deserialize_struct("PostEmbedding", FIELDS, PostEmbeddingVisitor)
+    }
+}
+
+fn parse_embedding_string(s: &str) -> Result<Vec<f32>, String> {
+    let s = s.trim_start_matches('[')
+        .trim_end_matches(']');
+    
+    s.split(',')
+        .map(|num| {
+            num.trim().parse::<f32>().map_err(|e| format!("Failed to parse number: {}", e))
+        })
+        .collect()
 }
 
 #[server(SearchPosts, "/api")]
-pub async fn semantic_search(query:String) -> Result<Vec<Poast>, ServerFnError> {
+pub async fn semantic_search(query: String) -> Result<Vec<Poast>, ServerFnError> {
     use async_openai::{
         types::{CreateEmbeddingRequestArgs, EmbeddingInput},
         Client,
     };
+    use log::{info, error, debug};
+
+    info!("Starting semantic search with query: {}", query);
     let openai = Client::new();
 
+    info!("Generating embedding for query");
     let query_embedding = openai
         .embeddings()
         .create(CreateEmbeddingRequestArgs::default()
@@ -551,46 +627,90 @@ pub async fn semantic_search(query:String) -> Result<Vec<Poast>, ServerFnError> 
         .data[0]
         .embedding
         .clone();
+    info!("Generated query embedding with {} dimensions", query_embedding.len());
 
     let supabase = crate::supabase::get_client();
+    info!("Fetching embeddings from Supabase");
     let response = supabase
-        .from("post embeddings")
+        .from("post_embeddings")
         .select("*")
         .execute()
         .await?;
 
-    let embeddings: Vec<PostEmbedding> = serde_json::from_str(&response.text().await?)?;
+    let response_text = response.text().await?;
+    debug!("Raw Supabase response: {}", response_text);
 
+    info!("Attempting to parse embeddings response");
+    let parse_result = serde_json::from_str::<Vec<PostEmbedding>>(&response_text);
+    
+    match &parse_result {
+        Ok(embeddings) => info!("Successfully parsed {} embeddings", embeddings.len()),
+        Err(e) => {
+            error!("Failed to parse embeddings: {}", e);
+            error!("First 500 chars of response: {}", &response_text[..response_text.len().min(500)]);
+            // Try to parse as Value to see the structure
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&response_text) {
+                error!("Response structure: {:#?}", value);
+            }
+            return Err(ServerFnError::ServerError(format!("Failed to parse embeddings: {}", e)));
+        }
+    }
+
+    let embeddings = parse_result?;
+    
+    info!("Calculating similarities for {} embeddings", embeddings.len());
     let mut results: Vec<(String, f32)> = embeddings
         .into_iter()
         .map(|post| {
             let similarity = cosine_similarity(&query_embedding, &post.embedding);
+            debug!("Similarity for {}: {}", post.link, similarity);
             (post.link, similarity)
         })
         .collect();
 
     results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    info!("Sorted {} results by similarity", results.len());
 
     let links: Vec<String> = results.iter()
         .take(10)
-        .map(|(link, _)| link.clone())
+        .map(|(link, score)| {
+            debug!("Selected result - link: {}, score: {}", link, score);
+            link.clone()
+        })
         .collect();
 
+    info!("Fetching full post data for top {} results", links.len());
     let posts_response = supabase
         .from("poasts")
-        .select("*")
+        .select("id, published_at, company, title, link, summary, links!posts_company_fkey(logo_url)")
         .in_("link", &links)
         .execute()
         .await?;
 
-    let mut posts: Vec<Poast> = serde_json::from_str(&posts_response.text().await?)?;
+    let posts_text = posts_response.text().await?;
+    debug!("Posts response: {}", posts_text);
 
+    let parse_posts_result = serde_json::from_str::<Vec<Poast>>(&posts_text);
+    
+    match &parse_posts_result {
+        Ok(posts) => info!("Successfully parsed {} posts", posts.len()),
+        Err(e) => {
+            error!("Failed to parse posts: {}", e);
+            error!("First 500 chars of posts response: {}", &posts_text[..posts_text.len().min(500)]);
+            return Err(ServerFnError::ServerError(format!("Failed to parse posts: {}", e)));
+        }
+    }
+
+    let mut posts = parse_posts_result?;
+
+    info!("Sorting posts by similarity scores");
     posts.sort_by(|a, b| {
         let a_score = results.iter().find(|(l, _)| l == &a.link).unwrap().1;
         let b_score = results.iter().find(|(l, _)| l == &b.link).unwrap().1;
         b_score.partial_cmp(&a_score).unwrap()
     });
 
+    info!("Returning {} ranked posts", posts.len());
     Ok(posts)
 }
 
@@ -601,4 +721,5 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
     dot_product / (norm_a * norm_b)
 }
+
 
