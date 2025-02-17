@@ -1,30 +1,48 @@
 use leptos::leptos_dom::helpers::TimeoutHandle;
 use leptos::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 #[derive(Clone, PartialEq)]
 pub struct SearchParams {
     pub query: String,
-    pub is_semantic: bool,
+    pub search_type: SearchType,
+}
+
+#[derive(Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SearchType {
+    Basic,
+    OpenAISemantic,
+    LocalSemantic,
+}
+
+impl SearchType {
+    fn placeholder(&self) -> &'static str {
+        match self {
+            SearchType::Basic => "Search blog posts...",
+            SearchType::OpenAISemantic => "Search blog posts using OpenAI...",
+            SearchType::LocalSemantic => "Search blog posts using local (all-MiniLM-L6-v2) AI...",
+        }
+    }
 }
 
 #[component]
 pub fn BlogSearch(#[prop(into)] on_search: Callback<SearchParams>) -> impl IntoView {
     let (search_term, set_search_term) = signal(String::new());
-    let (is_semantic, set_is_semantic) = signal(false);
+    let (search_type, set_search_type) = signal(SearchType::Basic);
     let timeout_handle: StoredValue<Option<TimeoutHandle>> = StoredValue::new(None);
 
-    let handle_search = move |current: String, semantic: bool| {
+    let handle_search = move |current: String, stype: SearchType| {
         on_search.run(SearchParams {
             query: current,
-            is_semantic: semantic,
+            search_type: stype,
         });
     };
 
     // create debounced effect for search
     Effect::new(move |_| {
         let current = search_term.get();
-        let semantic = is_semantic.get();
+        let current_type = search_type.get();
 
         if let Some(handle) = timeout_handle.get_value() {
             handle.clear();
@@ -32,10 +50,7 @@ pub fn BlogSearch(#[prop(into)] on_search: Callback<SearchParams>) -> impl IntoV
 
         let handle = set_timeout_with_handle(
             move || {
-                on_search.run(SearchParams {
-                    query: current,
-                    is_semantic: semantic,
-                });
+                handle_search(current, current_type);
             },
             Duration::from_millis(500),
         )
@@ -47,54 +62,47 @@ pub fn BlogSearch(#[prop(into)] on_search: Callback<SearchParams>) -> impl IntoV
     let clear_search = move |_| {
         on_search.run(SearchParams {
             query: String::new(),
-            is_semantic: is_semantic.get(),
+            search_type: search_type.get(),
         });
         set_search_term(String::new());
     };
 
-    let button_class = move || {
-        if is_semantic.get() {
-            "px-3 py-1.5 text-sm rounded-md transition-colors border-2 \
-             bg-seafoam-500 dark:bg-seafoam-600 text-white border-transparent \
-             focus:outline-none focus:ring-2 focus:ring-offset-2 \
-             focus:ring-seafoam-500 dark:focus:ring-aqua-400 \
-             dark:focus:ring-offset-teal-900"
-        } else {
-            "px-3 py-1.5 text-sm rounded-md transition-colors border-2 \
-             bg-white dark:bg-teal-800 text-gray-700 dark:text-gray-200 border-teal-600 \
-             focus:outline-none focus:ring-2 focus:ring-offset-2 \
-             focus:ring-seafoam-500 dark:focus:ring-aqua-400 \
-             dark:focus:ring-offset-teal-900"
-        }
-    };
+    let select_class = "px-3 py-1.5 text-sm rounded-md transition-colors border-2 \
+                       bg-white dark:bg-teal-800 text-gray-700 dark:text-gray-200 \
+                       border-teal-600 dark:border-seafoam-600 \
+                       focus:border-seafoam-500 dark:focus:border-aqua-400 \
+                       hover:border-seafoam-500 dark:hover:border-aqua-400";
 
     view! {
         <div class="w-full max-w-2xl mx-auto mb-6">
             <div class="flex items-center gap-4 mb-2">
-                <button
-                    class=button_class
-                    on:click=move |_| {
-                        set_is_semantic
-                            .update(|v| {
-                                let new_value = !*v;
-                                *v = new_value;
-                                handle_search(search_term.get(), new_value)
-                            })
+                <select
+                    class=select_class
+                    on:change=move |ev| {
+                        let value = event_target_value(&ev);
+                        let new_type = match value.as_str() {
+                            "openai" => SearchType::OpenAISemantic,
+                            "local" => SearchType::LocalSemantic,
+                            _ => SearchType::Basic,
+                        };
+                        set_search_type.set(new_type.clone());
+                        handle_search(search_term.get(), new_type);
+                    }
+                    prop:value=move || match search_type.get() {
+                        SearchType::Basic => "basic",
+                        SearchType::OpenAISemantic => "openai",
+                        SearchType::LocalSemantic => "local",
                     }
                 >
-                    {move || if is_semantic.get() { "Semantic Search" } else { "Basic Search" }}
-                </button>
+                    <option value="basic">"Basic Search"</option>
+                    <option value="openai">"OpenAI Semantic Search"</option>
+                    <option value="local">"all-MiniLM-L6-v2 Semantic Search"</option>
+                </select>
             </div>
             <div class="relative">
                 <input
                     type="text"
-                    placeholder=move || {
-                        if is_semantic.get() {
-                            "Search blog posts using AI..."
-                        } else {
-                            "Search blog posts..."
-                        }
-                    }
+                    placeholder=move || search_type.get().placeholder()
                     prop:value=search_term
                     on:input=move |ev| {
                         set_search_term(event_target_value(&ev));

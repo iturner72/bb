@@ -20,3 +20,6 @@ playwright/.cache/
 
 # macs amirite
 .DS_Store
+
+# ml
+models/

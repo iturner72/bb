@@ -3,6 +3,7 @@ pub mod batch_processor;
 pub mod dark_mode_toggle;
 pub mod embeddings;
 pub mod footer;
+pub mod local_embeddings;
 pub mod poasts;
 pub mod rss_test;
 pub mod search;

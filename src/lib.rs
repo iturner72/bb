@@ -5,6 +5,7 @@ pub mod backfill_service;
 pub mod cancellable_sse;
 pub mod components;
 pub mod embedding_service;
+pub mod embeddings_service;
 pub mod error_template;
 pub mod handlers;
 pub mod rss_service;

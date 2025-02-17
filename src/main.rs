@@ -63,6 +63,7 @@ cfg_if! {
                 .route("/api/backfill-progress", get(backfill_progress_handler))
                 .route("/api/refresh-summaries", get(refresh_summaries_handler))
                 .route("/api/generate-embeddings", get(embeddings_generation_handler))
+                .route("/api/generate-local-embeddings", get(local_embeddings_generation_handler))
                 .layer(middleware::from_fn(require_auth));
 
             let app = Router::new()

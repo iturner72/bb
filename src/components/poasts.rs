@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use serde::{Serialize, Deserialize};
 use std::borrow::Cow;
 
-use crate::components::search::{BlogSearch, SearchParams};
+use crate::components::search::{BlogSearch, SearchParams, SearchType};
 
 #[cfg(feature = "hydrate")]
 macro_rules! console_log {
@@ -216,7 +216,7 @@ pub async fn get_poasts(filter: Option<PostFilter>) -> Result<Vec<Poast>, Server
 pub fn Poasts() -> impl IntoView {
     let (search_params, set_search_params) = signal(SearchParams {
         query: String::new(),
-        is_semantic: false,
+        search_type: SearchType::Basic
     });
     let (selected_company, set_selected_company) = signal(String::new());
 
@@ -228,33 +228,38 @@ pub fn Poasts() -> impl IntoView {
             let company = selected_company.get();
 
             console_log!(
-                "Filter changed - search: '{}', semantic: {}, company: '{}'", 
+                "Filter changed - search: '{}', type: {:?}, company: '{}'", 
                 params.query, 
-                params.is_semantic,
+                params.search_type,
                 company
             );
             
             (params, company)
         },
         move |(params, company)| async move {
-            if params.is_semantic && !params.query.trim().is_empty() {
-                // For semantic search, first get results then filter by company if needed
-                let semantic_results = semantic_search(params.query).await?;
-                if company.trim().is_empty() {
-                    Ok(semantic_results)
-                } else {
-                    Ok(semantic_results
-                        .into_iter()
-                        .filter(|post| post.company == company)
-                        .collect())
+            match params.search_type {
+                SearchType::OpenAISemantic | SearchType::LocalSemantic => {
+                    if params.query.trim().is_empty() {
+                        get_poasts(None).await
+                    } else {
+                        let semantic_results = semantic_search(params.query, params.search_type).await?;
+                        if company.trim().is_empty() {
+                            Ok(semantic_results)
+                        } else {
+                            Ok(semantic_results
+                                .into_iter()
+                                .filter(|post| post.company == company)
+                                .collect())
+                        }
+                    }
                 }
-            } else {
-                // For traditional search, use the existing filter mechanism
-                let filter = PostFilter {
-                    search_term: if params.query.trim().is_empty() { None } else { Some(params.query) },
-                    company: if company.trim().is_empty() { None } else { Some(company) },
-                };
-                get_poasts(Some(filter)).await
+                SearchType::Basic => {
+                    let filter = PostFilter {
+                        search_term: if params.query.trim().is_empty() { None } else { Some(params.query) },
+                        company: if company.trim().is_empty() { None } else { Some(company) },
+                    };
+                    get_poasts(Some(filter)).await
+                }
             }
         }
     );
@@ -350,7 +355,8 @@ pub fn Poasts() -> impl IntoView {
                                     .into_any()
                             }
                         }
-                        Some(Err(_)) => {
+                        Some(Err(e)) => {
+                            console_log!("Error loading posts: {:?}", e);
                             view! {
                                 <div class="text-center text-red-500">"Error loading posts"</div>
                             }
@@ -531,6 +537,7 @@ fn HighlightedText<'a>(
 pub struct PostEmbedding {
     pub link: String,
     pub embedding: Vec<f32>,
+    pub minilm: Vec<f32>,
 }
 
 impl<'de> Deserialize<'de> for PostEmbedding {
@@ -540,10 +547,6 @@ impl<'de> Deserialize<'de> for PostEmbedding {
     {
         use serde::de::{self, MapAccess, Visitor};
         use std::fmt;
-
-        #[derive(Deserialize)]
-        #[serde(field_identifier, rename_all = "lowercase")]
-        enum Field { Link, Embedding }
 
         struct PostEmbeddingVisitor;
 
@@ -560,41 +563,72 @@ impl<'de> Deserialize<'de> for PostEmbedding {
             {
                 let mut link = None;
                 let mut embedding = None;
+                let mut minilm = None;
 
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        Field::Link => {
+                fn parse_embedding_value<E: de::Error>(value: serde_json::Value) -> Result<Vec<f32>, E> {
+                    if value.is_null() {
+                        return Ok(Vec::new());
+                    }
+                    
+                    match value {
+                        serde_json::Value::String(s) => {
+                            if s.trim().is_empty() || s == "null" {
+                                Ok(Vec::new())
+                            } else {
+                                parse_embedding_string(&s).map_err(de::Error::custom)
+                            }
+                        },
+                        serde_json::Value::Null => Ok(Vec::new()),
+                        _ => Err(de::Error::custom("embedding must be a string or null"))
+                    }
+                }
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "link" => {
                             if link.is_some() {
                                 return Err(de::Error::duplicate_field("link"));
                             }
                             link = Some(map.next_value()?);
                         }
-                        Field::Embedding => {
+                        "embedding" => {
                             if embedding.is_some() {
                                 return Err(de::Error::duplicate_field("embedding"));
                             }
-                            // Parse the embedding string into Vec<f32>
-                            let embedding_str: String = map.next_value()?;
-                            let parsed_embedding = parse_embedding_string(&embedding_str)
-                                .map_err(de::Error::custom)?;
-                            embedding = Some(parsed_embedding);
+                            let value: serde_json::Value = map.next_value()?;
+                            embedding = Some(parse_embedding_value(value)?);
+                        }
+                        "minilm" => {
+                            if minilm.is_some() {
+                                return Err(de::Error::duplicate_field("minilm"));
+                            }
+                            let value: serde_json::Value = map.next_value()?;
+                            minilm = Some(parse_embedding_value(value)?);
+                        }
+                        _ => {
+                            let _: serde_json::Value = map.next_value()?;
                         }
                     }
                 }
 
                 let link = link.ok_or_else(|| de::Error::missing_field("link"))?;
-                let embedding = embedding.ok_or_else(|| de::Error::missing_field("embedding"))?;
+                let embedding = embedding.unwrap_or_default();
+                let minilm = minilm.unwrap_or_default();
 
-                Ok(PostEmbedding { link, embedding })
+                Ok(PostEmbedding { link, embedding, minilm })
             }
         }
 
-        const FIELDS: &[&str] = &["link", "embedding"];
+        const FIELDS: &[&str] = &["link", "embedding", "minilm"];
         deserializer.deserialize_struct("PostEmbedding", FIELDS, PostEmbeddingVisitor)
     }
 }
 
 fn parse_embedding_string(s: &str) -> Result<Vec<f32>, String> {
+    if s.trim().is_empty() || s == "null" {
+        return Ok(Vec::new());
+    }
+    
     let s = s.trim_start_matches('[')
         .trim_end_matches(']');
     
@@ -605,29 +639,54 @@ fn parse_embedding_string(s: &str) -> Result<Vec<f32>, String> {
         .collect()
 }
 
-#[server(SearchPosts, "/api")]
-pub async fn semantic_search(query: String) -> Result<Vec<Poast>, ServerFnError> {
+#[cfg(feature = "ssr")]
+async fn get_openai_embedding(query: &str) -> Result<Vec<f32>, ServerFnError> {
     use async_openai::{
         types::{CreateEmbeddingRequestArgs, EmbeddingInput},
         Client,
     };
-    use log::{info, error, debug};
-
-    info!("Starting semantic search with query: {}", query);
     let openai = Client::new();
-
-    info!("Generating embedding for query");
-    let query_embedding = openai
+    openai
         .embeddings()
         .create(CreateEmbeddingRequestArgs::default()
             .model("text-embedding-3-small")
-            .input(EmbeddingInput::String(query))
-            .build()?)
-        .await?
-        .data[0]
-        .embedding
-        .clone();
-    info!("Generated query embedding with {} dimensions", query_embedding.len());
+            .input(EmbeddingInput::String(query.to_string()))
+            .build()
+            .map_err(|e| ServerFnError::new(format!("Failed to build embedding request: {}", e)))?)
+        .await
+        .map_err(|e| ServerFnError::new(format!("OpenAI API error: {}", e)))
+        .map(|response| response.data[0].embedding.clone())
+}
+
+
+#[server(SearchPosts, "/api")]
+pub async fn semantic_search(query: String, search_type: SearchType) -> Result<Vec<Poast>, ServerFnError> {
+    use crate::embeddings_service::embeddings_local::LocalEmbeddingService;
+    use log::{info, warn, error, debug};
+
+    info!("Starting semantic search with query: {} using {:?}", query, search_type);
+
+    let query_embedding = match search_type {
+        SearchType::OpenAISemantic => {
+            info!("Using OpenAi embeddings");
+            get_openai_embedding(&query).await?
+        }
+        SearchType::LocalSemantic => {
+            info!("Using local embeddings");
+            LocalEmbeddingService::init()?;
+            match LocalEmbeddingService::get_instance() {
+                Ok(service) => service.generate_embedding(&query)
+                    .map_err(|e| ServerFnError::new(format!("Local embedding error: {}", e)))?,
+                Err(e) => {
+                    error!("Failed to get local embedding service: {}", e);
+                    return Err(ServerFnError::new("Local embeddings not available"));
+                }
+            }
+        }
+        SearchType::Basic => return Err(ServerFnError::new("Invalid search type"))
+    };
+
+    info!("Query embedding generated, length: {}", query_embedding.len());
 
     let supabase = crate::supabase::get_client();
     info!("Fetching embeddings from Supabase");
@@ -637,34 +696,42 @@ pub async fn semantic_search(query: String) -> Result<Vec<Poast>, ServerFnError>
         .execute()
         .await?;
 
-    let response_text = response.text().await?;
-    debug!("Raw Supabase response: {}", response_text);
+    let response_text = response.text().await
+        .map_err(|e| ServerFnError::new(format!("Failed to get response text: {}", e)))?;
 
     info!("Attempting to parse embeddings response");
-    let parse_result = serde_json::from_str::<Vec<PostEmbedding>>(&response_text);
-    
-    match &parse_result {
-        Ok(embeddings) => info!("Successfully parsed {} embeddings", embeddings.len()),
-        Err(e) => {
+    let embeddings: Vec<PostEmbedding> = serde_json::from_str(&response_text)
+        .map_err(|e| {
             error!("Failed to parse embeddings: {}", e);
             error!("First 500 chars of response: {}", &response_text[..response_text.len().min(500)]);
-            // Try to parse as Value to see the structure
-            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&response_text) {
-                error!("Response structure: {:#?}", value);
-            }
-            return Err(ServerFnError::ServerError(format!("Failed to parse embeddings: {}", e)));
-        }
-    }
+            ServerFnError::new(format!("Failed to parse embeddings: {}", e))
+        })?;
+    info!("Successfully parsed {} embeddings", embeddings.len());
 
-    let embeddings = parse_result?;
-    
-    info!("Calculating similarities for {} embeddings", embeddings.len());
     let mut results: Vec<(String, f32)> = embeddings
         .into_iter()
-        .map(|post| {
-            let similarity = cosine_similarity(&query_embedding, &post.embedding);
+        .filter_map(|post| {
+            let embedding_to_compare = match search_type {
+                SearchType::OpenAISemantic => {
+                    if post.embedding.is_empty() {
+                        warn!("Skipping post {} - no OpenAI embedding", post.link);
+                        return None;
+                    }
+                    &post.embedding
+                },
+                SearchType::LocalSemantic => {
+                    if post.minilm.is_empty() {
+                        warn!("Skipping post {} - no local embedding", post.link);
+                        return None;
+                    }
+                    &post.minilm
+                },
+                SearchType::Basic => return None,
+            };
+    
+            let similarity = cosine_similarity(&query_embedding, embedding_to_compare);
             debug!("Similarity for {}: {}", post.link, similarity);
-            (post.link, similarity)
+            Some((post.link, similarity))
         })
         .collect();
 
@@ -672,7 +739,7 @@ pub async fn semantic_search(query: String) -> Result<Vec<Poast>, ServerFnError>
     info!("Sorted {} results by similarity", results.len());
 
     let links: Vec<String> = results.iter()
-        .take(10)
+        .take(30)
         .map(|(link, score)| {
             debug!("Selected result - link: {}, score: {}", link, score);
             link.clone()

@@ -10,6 +10,7 @@ use crate::components::auth_nav::AuthNav;
 use crate::components::batch_processor::BatchProcessor;
 use crate::components::embeddings::EmbeddingsProcessor;
 use crate::components::footer::Footer;
+use crate::components::local_embeddings::LocalEmbeddingsProcessor;
 use crate::components::poasts::Poasts;
 use crate::components::rss_test::RssTest;
 use crate::components::summary_refresh_processor::SummaryRefreshProcessor;
@@ -107,6 +108,12 @@ fn ProtectedAdminPanel() -> impl IntoView {
                                 "Generate Embeddings"
                             </h2>
                             <EmbeddingsProcessor />
+                        </div>
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
+                                "Generate Local Embeddings"
+                            </h2>
+                            <LocalEmbeddingsProcessor />
                         </div>
                         <div>
                             <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">

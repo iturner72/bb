@@ -14,12 +14,30 @@ path = "src/main.rs"
 name = "hash_password"
 path = "src/bin/hash_password.rs"
 
+[[bin]]
+name = "download_models"
+path = "src/bin/download_models.rs"
+
+[[bin]]
+name = "test_embedding"
+path = "src/bin/test_embedding.rs"
+
+[[bin]]
+name = "test_local_insert"
+path = "src/bin/test_local_insert.rs"
+
+[[bin]]
+name = "model_inspector"
+path = "src/bin/model_inspector.rs"
+
 [dependencies]
 async-openai = { version = "0.25", optional = true }
 argon2 = { version = "0.5.3", optional = true }
 axum = { version = "0.7.5", features = ["macros"], optional = true }
 axum-extra = { version = "0.9.6", features = ["cookie"], optional = true }
 base64 = { version = "0.22.1", optional = true }
+candle-core = { version = "0.8.3", optional = true }
+candle-nn = { version = "0.8.3", optional = true }
 console_error_panic_hook = "0.1"
 cookie = { version = "0.18.1", optional = true }
 chrono = { version = "0.4.38", features = ["serde"] }
@@ -36,14 +54,18 @@ leptos_axum = { version = "0.7.0", optional = true }
 leptos_meta = { version = "0.7.0", optional = false }
 leptos_router = { version = "0.7.0", features = ["nightly"] }
 log = "0.4"
+memmap2 = { version = "0.9.5", optional = true }
 once_cell = "1.18.0"
 postgrest = "1.0"
 reqwest = { version = "0.12.8", features = ["json"], optional = true }
+safetensors = { version = "0.5.2", optional = true }
+sha2 = { version = "0.10.8", optional = true }
 scraper = { version = "0.20.0", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde-wasm-bindgen = "0.6.5"
 serde_json = "1.0"
 time = { version = "0.3.37", optional = true }
+tokenizers = { version = "0.21.0", optional = true }
 tokio = { version = "1.42", features = ["rt-multi-thread", "macros"], optional = true }
 tokio-util = { version = "0.7.13", features = ["rt"], optional = true }
 tower = { version = "0.4", optional = true }
@@ -66,11 +88,16 @@ ssr = [
     "dep:axum-extra",
     "dep:base64",
     "dep:cookie",
+    "dep:candle-core",
+    "dep:candle-nn",
     "dep:dashmap",
     "dep:feed-rs",
     "dep:futures",
     "dep:futures-util",
     "dep:jsonwebtoken",
+    "dep:memmap2",
+    "dep:safetensors",
+    "dep:tokenizers",
     "dep:tokio",
     "dep:tokio-util",
     "dep:tower",
@@ -78,6 +105,7 @@ ssr = [
     "dep:leptos_axum",
     "dep:reqwest",
     "dep:scraper",
+    "dep:sha2",
     "dep:time",
     "dep:uuid",
     "leptos/ssr",

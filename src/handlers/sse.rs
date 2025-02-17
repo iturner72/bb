@@ -45,8 +45,28 @@ pub async fn embeddings_generation_handler(
         .cloned()
         .expect("stream_id is required");
 
-    create_cancellable_sse_stream(state.sse_state, stream_id, |tx, token| async move {
-        crate::embedding_service::embeddings::generate_embeddings(tx, token).await
+    create_cancellable_sse_stream(
+        state.sse_state,
+        stream_id,
+        |tx, token| async move {
+            crate::embedding_service::embeddings::generate_embeddings(tx, token).await
+    }).await
+}
+
+pub async fn local_embeddings_generation_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Sse<CancellableSseStream> {
+    let stream_id = params
+        .get("stream_id")
+        .cloned()
+        .expect("stream_id is required");
+
+    create_cancellable_sse_stream(
+        state.sse_state,
+        stream_id,
+        |tx, token| async move {
+            crate::embeddings_service::embeddings_local::generate_local_embeddings(tx, token).await
     }).await
 }
 
