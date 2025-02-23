@@ -132,7 +132,7 @@ pub async fn get_poasts(filter: Option<PostFilter>) -> Result<Vec<Poast>, Server
     }
 
     // check cache only if no search term is provided
-    if filter.is_none() {
+    if filter.as_ref().unwrap().search_term.is_none() {
         let cache_duration = CACHE_DURATION;
         let cached_data = POASTS_CACHE.lock().unwrap().clone();
 
@@ -204,7 +204,7 @@ pub async fn get_poasts(filter: Option<PostFilter>) -> Result<Vec<Poast>, Server
     info!("successfully parsed {} poasts", poasts.len());
 
     // update cache
-    if filter.is_none() { 
+    if filter.as_ref().unwrap().search_term.is_none() { 
         let mut cache = POASTS_CACHE.lock().unwrap();
         *cache = (Some(poasts.clone()), Instant::now());
     }
