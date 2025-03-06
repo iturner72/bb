@@ -131,8 +131,22 @@ pub async fn get_poasts(filter: Option<PostFilter>) -> Result<Vec<Poast>, Server
         ServerFnError::ServerError(e.to_string())
     }
 
-    // check cache only if no search term is provided
-    if filter.as_ref().unwrap().search_term.is_none() {
+    // check cache only if no search term is provided nor company filter is active
+    if let Some(filter) = &filter {
+        if filter.search_term.is_none() && filter.company.is_none() {
+            let cache_duration = CACHE_DURATION;
+            let cached_data = POASTS_CACHE.lock().unwrap().clone();
+
+            if let (Some(cached_poasts), last_fetch) = cached_data {
+                if last_fetch.elapsed() < cache_duration {
+                    info!("Returning cached poasts");
+                    info!("Cache debug: {:?}", (cached_poasts.len(), last_fetch));
+                    return Ok(cached_poasts);
+                }
+            }
+        }
+    } else {
+        // No filter at all, definitely use cache
         let cache_duration = CACHE_DURATION;
         let cached_data = POASTS_CACHE.lock().unwrap().clone();
 
@@ -204,7 +218,12 @@ pub async fn get_poasts(filter: Option<PostFilter>) -> Result<Vec<Poast>, Server
     info!("successfully parsed {} poasts", poasts.len());
 
     // update cache
-    if filter.as_ref().unwrap().search_term.is_none() { 
+    if let Some(filter) = &filter {
+        if filter.search_term.is_none() && filter.company.is_none(){ 
+            let mut cache = POASTS_CACHE.lock().unwrap();
+            *cache = (Some(poasts.clone()), Instant::now());
+        }
+    } else {
         let mut cache = POASTS_CACHE.lock().unwrap();
         *cache = (Some(poasts.clone()), Instant::now());
     }
