@@ -105,6 +105,23 @@ module.exports = {
         200: '#fedbdf',
         100: '#ffedef'
       },
+      
+      // Custom colors for similarity indicators
+      'aquamarine': {
+        DEFAULT: '#2dd4bf',
+        light: '#99f6e4',
+        dark: '#0d9488'
+      },
+      'purple': {
+        DEFAULT: '#a78bfa',
+        light: '#c4b5fd',
+        dark: '#7c3aed'
+      },
+      'orange': {
+        DEFAULT: '#fb923c',
+        light: '#fdba74',
+        dark: '#ea580c'
+      },
     },
     extend: {
       height: {

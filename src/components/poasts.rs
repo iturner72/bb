@@ -29,6 +29,7 @@ pub struct Poast {
     pub summary: Option<String>,
     pub full_text: Option<String>,
     pub links: Option<Links>,
+    pub similarity: Option<i32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -410,10 +411,63 @@ pub fn BlogPoast(
         set_is_expanded.update(|expanded| *expanded = !*expanded);
     };
     
+    // Function to determine background and border color classes based on similarity score
+    let get_similarity_colors = move |similarity: Option<i32>| -> (&'static str, &'static str, &'static str) {
+        match similarity {
+            // High similarity - aquamarine spectrum
+            Some(score) if score >= 90 => (
+                "bg-aquamarine-light bg-opacity-40 dark:bg-aquamarine-light dark:bg-opacity-20", 
+                "border border-aquamarine-dark dark:border-aquamarine",
+                "text-aquamarine-dark dark:text-aquamarine"
+            ),
+            // Medium similarity - purple spectrum
+            Some(score) if score >= 75 => (
+                "bg-purple-light bg-opacity-40 dark:bg-purple-light dark:bg-opacity-20", 
+                "border border-purple-dark dark:border-purple",
+                "text-purple-dark dark:text-purple"
+            ),
+            // Low similarity - orange spectrum
+            Some(score) if score > 0 => (
+                "bg-orange-light bg-opacity-40 dark:bg-orange-light dark:bg-opacity-20", 
+                "border border-orange-dark dark:border-orange",
+                "text-orange-dark dark:text-orange"
+            ),
+            // No similarity data
+            _ => (
+                "bg-gray-400 bg-opacity-20 dark:bg-gray-600 dark:bg-opacity-20", 
+                "border border-gray-600 dark:border-gray-400",
+                "text-gray-700 dark:text-gray-400"
+            )
+        }
+    };
+
+    // Format similarity percentage if available
+    let similarity_text = move || -> String {
+        match poast.similarity {
+            Some(score) => format!("{}%", score),
+            None => "".to_string()
+        }
+    };
+
     view! {
         <div class="relative p-4">
             <article class="base-poast flex flex-col items-start h-full w-full bg-white dark:bg-teal-800 border-2 border-gray-200 dark:border-teal-700 hover:border-seafoam-500 dark:hover:border-aqua-500 p-4 rounded-lg shadow-md hover:shadow-lg transition-all">
-                {}
+                {move || {
+                    poast.similarity.map(|_| {
+                        view! {
+                            <div class="absolute top-5 right-5 flex items-center">
+                                {
+                                    let (bg_class, border_class, text_class) = get_similarity_colors(poast.similarity);
+                                    view! {
+                                        <div class=format!("px-2.5 py-1 rounded-full text-xs font-medium {} {} {}", bg_class, border_class, text_class)>
+                                            {similarity_text()}
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+                    })
+                }}
                 <a
                     href=poast.link.clone()
                     class="block w-full"
@@ -788,6 +842,16 @@ pub async fn semantic_search(query: String, search_type: SearchType) -> Result<V
     }
 
     let mut posts = parse_posts_result?;
+
+    info!("Adding similarity scores to posts");
+    for post in &mut posts {
+        if let Some((_, score)) = results.iter().find(|(l, _)| l == &post.link) {
+            // Convert similarity score to percentage (0-100)
+            let percentage = (score * 100.0).round() as i32;
+            post.similarity = Some(percentage);
+            debug!("Post '{}' has similarity score: {}%", post.title, percentage);
+        }
+    }
 
     info!("Sorting posts by similarity scores");
     posts.sort_by(|a, b| {
