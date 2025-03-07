@@ -99,7 +99,7 @@ pub async fn generate_embeddings(
             "{}\n{}\n{}",
             post.title,
             post.summary.as_deref().unwrap_or(""),
-            post.full_text.as_deref().unwrap_or(""),
+            post.description.as_deref().unwrap_or(""),
         );
 
         match openai
@@ -175,7 +175,7 @@ pub async fn generate_embeddings(
             .await
             .map_err(|e| format!("Failed to send progress update: {}", e))?;
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     }
 
     for (_, progress) in company_states.iter_mut() {
@@ -235,7 +235,7 @@ pub async fn test_single_embedding() -> Result<(), Box<dyn std::error::Error>> {
             "{}\n{}\n{}",
             post.title,
             post.summary.as_deref().unwrap_or(""),
-            post.full_text.as_deref().unwrap_or("")
+            post.description.as_deref().unwrap_or("")
         );
 
         log::info!("Getting embedding from OpenAI");

@@ -259,7 +259,7 @@ pub mod embeddings_local {
                 "{}\n{}\n{}",
                 post.title,
                 post.summary.as_deref().unwrap_or(""),
-                post.full_text.as_deref().unwrap_or(""),
+                post.description.as_deref().unwrap_or(""),
             );
     
             match service.generate_embedding(&text) {
@@ -327,8 +327,6 @@ pub mod embeddings_local {
             progress_sender.send(company_progress.clone().into_event())
                 .await
                 .map_err(|e| format!("Failed to send progress update: {}", e))?;
-    
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
     
         for (_, progress) in company_states.iter_mut() {
@@ -379,7 +377,7 @@ pub mod embeddings_local {
                 "{}\n{}\n{}",
                 post.title,
                 post.summary.as_deref().unwrap_or(""),
-                post.full_text.as_deref().unwrap_or("")
+                post.description.as_deref().unwrap_or("")
             );
     
             log::info!("Generating local embedding");
