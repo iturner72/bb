@@ -199,33 +199,60 @@ pub mod embeddings_local {
             return Ok(())
         }
     
-        // Get posts that either don't have embeddings or have null local embeddings
-        let posts_response = supabase
-            .from("poasts")
-            .select("*")
-            .or("link.not.in.(select link from post_embeddings),link.in.(select link from post_embeddings where localembedding is null)")
+        // Get all existing embeddings 
+        let embeddings_response = supabase
+            .from("post_embeddings")
+            .select("link,minilm")
             .execute()
             .await?;
     
-        let response_text = posts_response.text().await?.to_string();
-        debug!("Supabase posts response: {}", response_text);
-    
-        let posts_value: serde_json::Value = serde_json::from_str(&response_text)?;
-        let posts: Vec<Poast> = if let serde_json::Value::Array(arr) = posts_value {
+        let embeddings_text = embeddings_response.text().await?;
+
+        let embeddings_value: serde_json::Value = serde_json::from_str(&embeddings_text)?;
+        let links_with_embeddings: Vec<String> = if let serde_json::Value::Array(arr) = embeddings_value {
             arr.iter()
                 .filter_map(|v| {
-                    let result = serde_json::from_value(v.clone());
-                    if let Err(ref e) = result {
-                        error!("Failed to parse post: {}", e);
+                    let link = v.get("link")?.as_str()?;
+                    let minilm = v.get("minilm");
+
+                    if minilm.is_some() && !minilm.unwrap().is_null() {
+                        Some(link.to_string())
+                    } else {
+                        None
                     }
-                    result.ok()
                 })
                 .collect()
         } else {
-            return Err("Expected array response from Supabase".into());
+            Vec::new()
         };
     
-        info!("Found {} posts needing local embeddings", posts.len());
+        info!("Found {} posts with existing minilm embeddings", links_with_embeddings.len());
+
+        let all_posts_response = supabase
+            .from("poasts")
+            .select("*")
+            .execute()
+            .await?;
+
+        let all_posts_text = all_posts_response.text().await?;
+        let all_posts_value: serde_json::Value = serde_json::from_str(&all_posts_text)?;
+
+        let posts: Vec<Poast> = if let serde_json::Value::Array(arr) = all_posts_value {
+            arr.iter()
+                .filter_map(|v| {
+                    let post: Result<Poast, _> = serde_json::from_value(v.clone());
+                    if let Ok(post) = post {
+                        if !links_with_embeddings.contains(&post.link) {
+                            return Some(post);
+                        }
+                    }
+                    None
+                }).collect()
+        } else {
+            Vec::new()
+        };
+
+        info!("Found {} posts needing minilm embeddings", posts.len());
     
         for (index, post) in posts.iter().enumerate() {
             if cancel_token.is_cancelled() {
@@ -366,7 +393,6 @@ pub mod embeddings_local {
             .await?;
 
         let response_text = response.text().await?;
-        log::debug!("Supabase response: {}", response_text);
 
         let posts: Vec<Poast> = serde_json::from_str(&response_text)?;
 
