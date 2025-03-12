@@ -234,7 +234,7 @@ pub async fn generate_embeddings(
                                 .insert(json!({
                                     "link": post.link,
                                     "embedding": embedding_response.data[0].embedding,
-                                    "localembedding": null
+                                    "minilm": null
                                 }).to_string())
                                 .execute()
                                 .await
