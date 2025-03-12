@@ -39,33 +39,122 @@ pub async fn generate_embeddings(
         return Ok(())
     }
 
-    // Get posts that either don't have embeddings or have null embeddings
-    let posts_response = supabase
-        .from("poasts")
-        .select("*")
-        .or("link.not.in.(select link from post_embeddings),link.in.(select link from post_embeddings where embedding is null)")
-        .execute()
-        .await?;
+    // First get all existing embeddings with pagination
+    let mut links_with_embeddings: Vec<String> = Vec::new();
+    let page_size = 1000;
+    let mut current_page = 0;
 
-    let response_text = posts_response.text().await?.to_string();
-    info!("Supabase posts response: {}", response_text);
+    loop {
+        if cancel_token.is_cancelled() {
+            info!("Embeddings retrieval cancelled during pagination");
+            return Ok(());
+        }
 
-    let posts_value: serde_json::Value = serde_json::from_str(&response_text)?;
-    let posts: Vec<Poast> = if let serde_json::Value::Array(arr) = posts_value {
-        arr.iter()
-            .filter_map(|v| {
-                let result = serde_json::from_value(v.clone());
-                if let Err(ref e) = result {
-                    error!("Failed to parse post: {}", e);
-                }
-                result.ok()
-            })
-            .collect()
-    } else {
-        return Err("Expected array response from Supabase".into());
-    };
+        let start = current_page * page_size;
+        let end = start + page_size - 1;
+        
+        info!("Fetching embeddings page {}: range {}-{}", current_page + 1, start, end);
+        
+        let embeddings_response = supabase
+            .from("post_embeddings")
+            .select("link,embedding")
+            .range(start, end)
+            .execute()
+            .await?;
 
-    info!("Found {} posts needing embeddings", posts.len());
+        let embeddings_text = embeddings_response.text().await?;
+        let embeddings_value: serde_json::Value = serde_json::from_str(&embeddings_text)?;
+        
+        if let serde_json::Value::Array(arr) = embeddings_value {
+            if arr.is_empty() {
+                // No more records, exit the loop
+                break;
+            }
+            
+            let page_links: Vec<String> = arr.iter()
+                .filter_map(|v| {
+                    let link = v.get("link")?.as_str()?;
+                    let embedding = v.get("embedding");
+
+                    if embedding.is_some() && !embedding.unwrap().is_null() {
+                        Some(link.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+                
+            links_with_embeddings.extend(page_links);
+            current_page += 1;
+        } else {
+            // Invalid response format, exit the loop
+            break;
+        }
+    }
+
+    info!("Found {} posts with existing OpenAI embeddings", links_with_embeddings.len());
+
+    // Now get all posts with pagination
+    let mut posts: Vec<Poast> = Vec::new();
+    current_page = 0;
+
+    loop {
+        if cancel_token.is_cancelled() {
+            info!("Posts retrieval cancelled during pagination");
+            return Ok(());
+        }
+
+        let start = current_page * page_size;
+        let end = start + page_size - 1;
+        
+        info!("Fetching posts page {}: range {}-{}", current_page + 1, start, end);
+        
+        let posts_response = supabase
+            .from("poasts")
+            .select("*")
+            .range(start, end)
+            .execute()
+            .await?;
+
+        let posts_text = posts_response.text().await?;
+        
+        if current_page == 0 {
+            info!("First page Supabase posts response: {}", posts_text);
+        } else {
+            info!("Retrieved page {} of posts", current_page + 1);
+        }
+
+        let posts_value: serde_json::Value = serde_json::from_str(&posts_text)?;
+        
+        if let serde_json::Value::Array(arr) = posts_value {
+            if arr.is_empty() {
+                // No more records, exit the loop
+                break;
+            }
+            
+            let page_posts: Vec<Poast> = arr.iter()
+                .filter_map(|v| {
+                    let result: Result<Poast, _> = serde_json::from_value(v.clone());
+                    if let Ok(post) = result {
+                        if !links_with_embeddings.contains(&post.link) {
+                            return Some(post);
+                        }
+                    } else if let Err(ref e) = result {
+                        error!("Failed to parse post: {}", e);
+                    }
+                    None
+                })
+                .collect();
+                
+            posts.extend(page_posts);
+            current_page += 1;
+        } else {
+            error!("Expected array response from Supabase, got: {}", posts_text);
+            break;
+        }
+    }
+
+    info!("Found {} posts needing embeddings across {} pages", posts.len(), current_page);
 
     for (index, post) in posts.iter().enumerate() {
         if cancel_token.is_cancelled() {

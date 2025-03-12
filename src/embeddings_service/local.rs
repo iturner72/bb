@@ -199,59 +199,112 @@ pub mod embeddings_local {
             return Ok(())
         }
     
-        // Get all existing embeddings 
-        let embeddings_response = supabase
-            .from("post_embeddings")
-            .select("link,minilm")
-            .execute()
-            .await?;
+        // Get all existing embeddings with pagination
+        let mut links_with_embeddings: Vec<String> = Vec::new();
+        let page_size = 1000;
+        let mut current_page = 0;
     
-        let embeddings_text = embeddings_response.text().await?;
-
-        let embeddings_value: serde_json::Value = serde_json::from_str(&embeddings_text)?;
-        let links_with_embeddings: Vec<String> = if let serde_json::Value::Array(arr) = embeddings_value {
-            arr.iter()
-                .filter_map(|v| {
-                    let link = v.get("link")?.as_str()?;
-                    let minilm = v.get("minilm");
-
-                    if minilm.is_some() && !minilm.unwrap().is_null() {
-                        Some(link.to_string())
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
+        loop {
+            if cancel_token.is_cancelled() {
+                info!("Embeddings retrieval cancelled during pagination");
+                return Ok(());
+            }
+    
+            let start = current_page * page_size;
+            let end = start + page_size - 1;
+            
+            info!("Fetching embeddings page {}: range {}-{}", current_page + 1, start, end);
+            
+            let embeddings_response = supabase
+                .from("post_embeddings")
+                .select("link,minilm")
+                .range(start, end)
+                .execute()
+                .await?;
+    
+            let embeddings_text = embeddings_response.text().await?;
+            let embeddings_value: serde_json::Value = serde_json::from_str(&embeddings_text)?;
+            
+            if let serde_json::Value::Array(arr) = embeddings_value {
+                if arr.is_empty() {
+                    // No more records, exit the loop
+                    break;
+                }
+                
+                let page_links: Vec<String> = arr.iter()
+                    .filter_map(|v| {
+                        let link = v.get("link")?.as_str()?;
+                        let minilm = v.get("minilm");
+    
+                        if minilm.is_some() && !minilm.unwrap().is_null() {
+                            Some(link.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                    
+                links_with_embeddings.extend(page_links);
+                current_page += 1;
+            } else {
+                // Invalid response format, exit the loop
+                break;
+            }
+        }
     
         info!("Found {} posts with existing minilm embeddings", links_with_embeddings.len());
-
-        let all_posts_response = supabase
-            .from("poasts")
-            .select("*")
-            .execute()
-            .await?;
-
-        let all_posts_text = all_posts_response.text().await?;
-        let all_posts_value: serde_json::Value = serde_json::from_str(&all_posts_text)?;
-
-        let posts: Vec<Poast> = if let serde_json::Value::Array(arr) = all_posts_value {
-            arr.iter()
-                .filter_map(|v| {
-                    let post: Result<Poast, _> = serde_json::from_value(v.clone());
-                    if let Ok(post) = post {
-                        if !links_with_embeddings.contains(&post.link) {
-                            return Some(post);
+    
+        // Get all posts with pagination
+        let mut posts: Vec<Poast> = Vec::new();
+        current_page = 0;
+    
+        loop {
+            if cancel_token.is_cancelled() {
+                info!("Posts retrieval cancelled during pagination");
+                return Ok(());
+            }
+    
+            let start = current_page * page_size;
+            let end = start + page_size - 1;
+            
+            info!("Fetching posts page {}: range {}-{}", current_page + 1, start, end);
+            
+            let posts_response = supabase
+                .from("poasts")
+                .select("*")
+                .range(start, end)
+                .execute()
+                .await?;
+    
+            let posts_text = posts_response.text().await?;
+            let posts_value: serde_json::Value = serde_json::from_str(&posts_text)?;
+            
+            if let serde_json::Value::Array(arr) = posts_value {
+                if arr.is_empty() {
+                    // No more records, exit the loop
+                    break;
+                }
+                
+                let page_posts: Vec<Poast> = arr.iter()
+                    .filter_map(|v| {
+                        let post: Result<Poast, _> = serde_json::from_value(v.clone());
+                        if let Ok(post) = post {
+                            if !links_with_embeddings.contains(&post.link) {
+                                return Some(post);
+                            }
                         }
-                    }
-                    None
-                }).collect()
-        } else {
-            Vec::new()
-        };
-
+                        None
+                    })
+                    .collect();
+                    
+                posts.extend(page_posts);
+                current_page += 1;
+            } else {
+                // Invalid response format, exit the loop
+                break;
+            }
+        }
+    
         info!("Found {} posts needing minilm embeddings", posts.len());
     
         for (index, post) in posts.iter().enumerate() {

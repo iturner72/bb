@@ -453,20 +453,27 @@ pub fn BlogPoast(
         <div class="relative p-4">
             <article class="base-poast flex flex-col items-start h-full w-full bg-white dark:bg-teal-800 border-2 border-gray-200 dark:border-teal-700 hover:border-seafoam-500 dark:hover:border-aqua-500 p-4 rounded-lg shadow-md hover:shadow-lg transition-all">
                 {move || {
-                    poast.similarity.map(|_| {
-                        view! {
-                            <div class="absolute top-5 right-5 flex items-center">
-                                {
-                                    let (bg_class, border_class, text_class) = get_similarity_colors(poast.similarity);
-                                    view! {
-                                        <div class=format!("px-2.5 py-1 rounded-full text-xs font-medium {} {} {}", bg_class, border_class, text_class)>
-                                            {similarity_text()}
-                                        </div>
+                    poast
+                        .similarity
+                        .map(|_| {
+                            view! {
+                                <div class="absolute top-5 right-5 flex items-center">
+                                    {
+                                        let (bg_class, border_class, text_class) = get_similarity_colors(
+                                            poast.similarity,
+                                        );
+                                        view! {
+                                            <div class=format!(
+                                                "px-2.5 py-1 rounded-full text-xs font-medium {} {} {}",
+                                                bg_class,
+                                                border_class,
+                                                text_class,
+                                            )>{similarity_text()}</div>
+                                        }
                                     }
-                                }
-                            </div>
-                        }
-                    })
+                                </div>
+                            }
+                        })
                 }}
                 <a
                     href=poast.link.clone()
@@ -731,7 +738,6 @@ async fn get_openai_embedding(query: &str) -> Result<Vec<f32>, ServerFnError> {
         .map(|response| response.data[0].embedding.clone())
 }
 
-
 #[server(SearchPosts, "/api")]
 pub async fn semantic_search(query: String, search_type: SearchType) -> Result<Vec<Poast>, ServerFnError> {
     use crate::embeddings_service::embeddings_local::LocalEmbeddingService;
@@ -761,27 +767,66 @@ pub async fn semantic_search(query: String, search_type: SearchType) -> Result<V
 
     info!("Query embedding generated, length: {}", query_embedding.len());
 
+    // Fetch all embeddings using pagination
     let supabase = crate::supabase::get_client();
-    info!("Fetching embeddings from Supabase");
-    let response = supabase
-        .from("post_embeddings")
-        .select("*")
-        .execute()
-        .await?;
+    info!("Fetching embeddings from Supabase with pagination");
+    
+    let mut all_embeddings: Vec<PostEmbedding> = Vec::new();
+    let page_size = 1000;
+    let mut current_page = 0;
+    
+    loop {
+        let start = current_page * page_size;
+        let end = start + page_size - 1;
+        
+        info!("Fetching embeddings page {}: range {}-{}", current_page + 1, start, end);
+        
+        let response = supabase
+            .from("post_embeddings")
+            .select("*")
+            .range(start, end)
+            .execute()
+            .await
+            .map_err(|e| ServerFnError::new(format!("Failed to fetch embeddings: {}", e)))?;
 
-    let response_text = response.text().await
-        .map_err(|e| ServerFnError::new(format!("Failed to get response text: {}", e)))?;
+        let response_text = response.text().await
+            .map_err(|e| ServerFnError::new(format!("Failed to get response text: {}", e)))?;
 
-    info!("Attempting to parse embeddings response");
-    let embeddings: Vec<PostEmbedding> = serde_json::from_str(&response_text)
-        .map_err(|e| {
-            error!("Failed to parse embeddings: {}", e);
-            error!("First 500 chars of response: {}", &response_text[..response_text.len().min(500)]);
-            ServerFnError::new(format!("Failed to parse embeddings: {}", e))
-        })?;
-    info!("Successfully parsed {} embeddings", embeddings.len());
+        let embeddings_value: serde_json::Value = serde_json::from_str(&response_text)
+            .map_err(|e| {
+                error!("Failed to parse embeddings page {}: {}", current_page + 1, e);
+                error!("First 500 chars of response: {}", &response_text[..response_text.len().min(500)]);
+                ServerFnError::new(format!("Failed to parse embeddings: {}", e))
+            })?;
+            
+        if let serde_json::Value::Array(arr) = embeddings_value {
+            if arr.is_empty() {
+                // No more records, exit the loop
+                break;
+            }
+            
+            let page_embeddings: Vec<PostEmbedding> = arr.iter()
+                .filter_map(|v| {
+                    let result = serde_json::from_value(v.clone());
+                    if let Err(ref e) = result {
+                        error!("Failed to parse embedding: {}", e);
+                    }
+                    result.ok()
+                })
+                .collect();
+                
+            info!("Successfully parsed {} embeddings from page {}", page_embeddings.len(), current_page + 1);
+            all_embeddings.extend(page_embeddings);
+            current_page += 1;
+        } else {
+            error!("Expected array response from Supabase, got: {}", &response_text[..response_text.len().min(500)]);
+            break;
+        }
+    }
+    
+    info!("Successfully fetched and parsed {} embeddings across {} pages", all_embeddings.len(), current_page);
 
-    let mut results: Vec<(String, f32)> = embeddings
+    let mut results: Vec<(String, f32)> = all_embeddings
         .into_iter()
         .filter_map(|post| {
             let embedding_to_compare = match search_type {
