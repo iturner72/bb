@@ -46,7 +46,17 @@ pub fn DrawingCanvas() -> impl IntoView {
 
     // Initialize WebSocket on component mount
     let setup_websocket = move || {
-        let ws_url = format!("ws://{}/ws/drawing", window().location().host().unwrap());
+        let protocol = if window().location().protocol().unwrap() == "https:" {
+            "wss"
+        } else {
+            "ws"
+        };
+
+        let ws_url = format!(
+            "{}://{}/ws/drawing",
+            protocol,
+            window().location().host().unwrap()
+        );
         log::info!("Connecting to WebSocket at {}", ws_url);
 
         match web_sys::WebSocket::new(&ws_url) {

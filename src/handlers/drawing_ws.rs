@@ -17,7 +17,7 @@ pub async fn drawing_ws_handler(
         *user_count += 1;
         tracing::debug!("Drawing user connected! Total users: {}", user_count);
     }
-    ws.on_upgrade(|socket| handle_drawing_socket(socket, state))
+    ws.on_upgrade(move |socket| handle_drawing_socket(socket, state))
 }
 
 async fn handle_drawing_socket(socket: WebSocket, state: AppState) {
