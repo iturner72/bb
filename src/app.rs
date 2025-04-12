@@ -8,6 +8,7 @@ use leptos_router::{
 use crate::auth::auth_components::{AdminLogin, ProtectedRoute};
 use crate::components::auth_nav::AuthNav;
 use crate::components::batch_processor::BatchProcessor;
+use crate::components::drawing::DrawingPage;
 use crate::components::embeddings::EmbeddingsProcessor;
 use crate::components::footer::Footer;
 use crate::components::local_embeddings::LocalEmbeddingsProcessor;
@@ -20,16 +21,16 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
         <!DOCTYPE html>
         <html lang="en">
             <head>
-                <meta charset="utf-8" />
-                <meta name="viewport" content="width=device-width, initial-scale=1" />
-                <AutoReload options=options.clone() />
-                <HydrationScripts options />
-                <link rel="stylesheet" id="leptos" href="/pkg/bb.css" />
-                <link rel="shortcut icon" type="image/ico" href="/favicon.ico" />
-                <MetaTags />
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <AutoReload options=options.clone()/>
+                <HydrationScripts options/>
+                <link rel="stylesheet" id="leptos" href="/pkg/bb.css"/>
+                <link rel="shortcut icon" type="image/ico" href="/favicon.ico"/>
+                <MetaTags/>
             </head>
             <body>
-                <App />
+                <App/>
             </body>
         </html>
     }
@@ -42,9 +43,10 @@ pub fn App() -> impl IntoView {
     view! {
         <Router>
             <FlatRoutes fallback=|| "page not found.">
-                <Route path=path!("") view=HomePage />
-                <Route path=path!("admin") view=AdminLogin />
-                <Route path=path!("admin-panel") view=ProtectedAdminPanel />
+                <Route path=path!("") view=HomePage/>
+                <Route path=path!("admin") view=AdminLogin/>
+                <Route path=path!("admin-panel") view=ProtectedAdminPanel/>
+                <Route path=path!("draw") view=DrawingPage/>
             </FlatRoutes>
         </Router>
     }
@@ -56,15 +58,27 @@ fn HomePage() -> impl IntoView {
         <div class="w-full mx-auto pl-2 bg-gray-100 dark:bg-teal-900">
             <div class="flex justify-between items-center">
                 <a
+
                     href="/"
                     class="text-3xl text-left text-seafoam-600 dark:text-mint-400 ib pl-4 p-4 font-bold"
                 >
                     "bryptoblogs"
                 </a>
-                <AuthNav />
+                <AuthNav/>
             </div>
-            <Poasts />
-            <Footer />
+            <Poasts/>
+
+            <div class="container mx-auto p-4 flex justify-center">
+                <a
+
+                    href="/draw"
+                    class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded transition-colors"
+                >
+                    "Try Collaborative Drawing"
+                </a>
+            </div>
+
+            <Footer/>
         </div>
     }
 }
@@ -94,6 +108,7 @@ fn ProtectedAdminPanel() -> impl IntoView {
                 }
                     .into_any()
             }
+
             children=move || {
                 view! {
                     <div class="max-w-7xl mx-auto px-4 py-6 space-y-8">
@@ -101,31 +116,31 @@ fn ProtectedAdminPanel() -> impl IntoView {
                             <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
                                 "RSS Feed Processing"
                             </h2>
-                            <RssTest />
+                            <RssTest/>
                         </div>
                         <div>
                             <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
                                 "Generate Embeddings"
                             </h2>
-                            <EmbeddingsProcessor />
+                            <EmbeddingsProcessor/>
                         </div>
                         <div>
                             <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
                                 "Generate Local Embeddings"
                             </h2>
-                            <LocalEmbeddingsProcessor />
+                            <LocalEmbeddingsProcessor/>
                         </div>
                         <div>
                             <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
                                 "Backfill Missing Data"
                             </h2>
-                            <BatchProcessor />
+                            <BatchProcessor/>
                         </div>
                         <div>
                             <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
                                 "Refresh Summaries"
                             </h2>
-                            <SummaryRefreshProcessor />
+                            <SummaryRefreshProcessor/>
                         </div>
                     </div>
                 }

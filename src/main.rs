@@ -11,6 +11,8 @@ cfg_if! {
             middleware,
             Router,
         };
+        use tokio::sync::broadcast;
+        use std::sync::{Arc,Mutex};
         use dotenv::dotenv;
         use env_logger::Env;
         use leptos::prelude::*;
@@ -41,6 +43,9 @@ cfg_if! {
             let app_state = AppState {
                 leptos_options: leptos_options.clone(),
                 sse_state: SseState::new(),
+                tx: broadcast::Sender::new(100),
+                drawing_tx: broadcast::Sender::new(100),
+                user_count: Arc::new(Mutex::new(0)),
             };
 
             async fn server_fn_handler(
@@ -71,6 +76,7 @@ cfg_if! {
                     "/api/*fn_name",
                     get(server_fn_handler).post(server_fn_handler),
                 )
+                .route("/ws/drawing", get(drawing_ws_handler))
                 .merge(protected_routes)
                 .leptos_routes_with_handler(routes, get(|State(app_state): State<AppState>, request: Request<AxumBody>| async move {
                     let handler = leptos_axum::render_app_to_stream_with_context(
