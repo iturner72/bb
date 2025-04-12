@@ -1,15 +1,8 @@
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
-
-#[cfg(feature = "hydrate")]
-macro_rules! console_log {
-    ($($t:tt)*) => {
-        web_sys::console::log_1(&format!($($t)*).into());
-    };
-}
+use wasm_bindgen::{prelude::*, JsCast};
+use web_sys::{js_sys, CanvasRenderingContext2d};
 
 // Define the DrawEvent type directly in this module
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -198,6 +191,68 @@ pub fn DrawingCanvas() -> impl IntoView {
         set_is_drawing.set(false);
     };
 
+    let on_touch_start = move |e: web_sys::TouchEvent| {
+        e.prevent_default();
+        let touches = e.touches();
+        if touches.length() > 0 {
+            if let Some(touch) = js_sys::try_iter(&touches)
+                .unwrap()
+                .unwrap()
+                .next()
+                .and_then(Result::ok)
+            {
+                let touch: web_sys::Touch = touch.dyn_into().unwrap();
+                set_is_drawing.set(true);
+
+                if let Some(canvas) = canvas_ref.get() {
+                    let rect = canvas.get_bounding_client_rect();
+                    let x = touch.client_x() as f64 - rect.left();
+                    let y = touch.client_y() as f64 - rect.top();
+
+                    set_last_x.set(x);
+                    set_last_y.set(y);
+                }
+            }
+        }
+    };
+
+    let on_touch_move = move |e: web_sys::TouchEvent| {
+        e.prevent_default();
+        if is_drawing.get() {
+            let touches = e.touches();
+            if touches.length() > 0 {
+                if let Some(touch) = js_sys::try_iter(&touches)
+                    .unwrap()
+                    .unwrap()
+                    .next()
+                    .and_then(Result::ok)
+                {
+                    let touch: web_sys::Touch = touch.dyn_into().unwrap();
+
+                    if let Some(canvas) = canvas_ref.get() {
+                        let rect = canvas.get_bounding_client_rect();
+                        let x = touch.client_x() as f64 - rect.left();
+                        let y = touch.client_y() as f64 - rect.top();
+
+                        draw_line(last_x.get(), last_y.get(), x, y);
+                        set_last_x.set(x);
+                        set_last_y.set(y);
+                    }
+                }
+            }
+        }
+    };
+
+    let on_touch_end = move |e: web_sys::TouchEvent| {
+        e.prevent_default();
+        set_is_drawing.set(false);
+    };
+
+    let on_touch_cancel = move |e: web_sys::TouchEvent| {
+        e.prevent_default();
+        set_is_drawing.set(false);
+    };
+
     let clear_canvas = move |_| {
         if let Some(canvas) = canvas_ref.get() {
             let context = canvas
@@ -283,7 +338,11 @@ pub fn DrawingCanvas() -> impl IntoView {
                     on:mousemove=on_mouse_move
                     on:mouseup=on_mouse_up
                     on:mouseout=on_mouse_out
-                    class="bg-white touch-none"
+                    on:touchstart=on_touch_start
+                    on:touchmove=on_touch_move
+                    on:touchend=on_touch_end
+                    on:touchcancel=on_touch_cancel
+                    class="bg-white touch-auto"
                 ></canvas>
             </div>
 

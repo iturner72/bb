@@ -17,9 +17,7 @@ cfg_if! {
         use env_logger::Env;
         use leptos::prelude::*;
         use leptos_axum::{generate_route_list, handle_server_fns_with_context, LeptosRoutes};
-        use axum::extract::connect_info::ConnectInfo;
         use std::net::SocketAddr;
-        use tower_http::trace::TraceLayer;
         use bb::app::*;
         use bb::auth::server::middleware::require_auth;
         use bb::state::AppState;
