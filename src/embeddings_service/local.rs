@@ -5,7 +5,7 @@ pub mod embeddings_local {
     use tokio_util::sync::CancellationToken;
     use std::{collections::HashMap, convert::Infallible};
     use serde_json::json;
-    use log::{debug, error, info};
+    use log::{error, info};
     use std::sync::OnceLock;
     use thiserror::Error;
     use axum::response::sse::Event;

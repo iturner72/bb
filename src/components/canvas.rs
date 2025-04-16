@@ -1,3 +1,4 @@
+use cfg_if::cfg_if;
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -30,11 +31,11 @@ pub fn DrawingCanvas() -> impl IntoView {
     let (user_id, _set_user_id) = signal(generate_user_id());
 
     // Canvas reference
-    let canvas_ref = create_node_ref::<leptos::html::Canvas>();
+    let canvas_ref = NodeRef::<leptos::html::Canvas>::new();
 
     // Store WebSocket in a thread-local storage
     thread_local! {
-        static WEBSOCKET: RefCell<Option<web_sys::WebSocket>> = RefCell::new(None);
+        static WEBSOCKET: RefCell<Option<web_sys::WebSocket>> = const {RefCell::new(None) };
     }
 
     // Initialize WebSocket on component mount
@@ -64,7 +65,6 @@ pub fn DrawingCanvas() -> impl IntoView {
                     log::info!("WebSocket disconnected");
                 }) as Box<dyn FnMut()>);
 
-                let canvas_ref_clone = canvas_ref.clone();
                 let user_id_clone = user_id.get();
                 let message_closure = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
                     if let Some(text) = e.data().as_string() {
@@ -72,7 +72,7 @@ pub fn DrawingCanvas() -> impl IntoView {
                             Ok(event) => {
                                 // Only process events from other users
                                 if event.user_id != user_id_clone {
-                                    if let Some(canvas) = canvas_ref_clone.get() {
+                                    if let Some(canvas) = canvas_ref.get() {
                                         draw_event_on_canvas(&canvas, &event);
                                     }
                                 }
@@ -106,7 +106,7 @@ pub fn DrawingCanvas() -> impl IntoView {
     };
 
     // Initialize WebSocket on component mount
-    create_render_effect(move |_| {
+    let _ = RenderEffect::new(move |_| {
         setup_websocket();
 
         // Cleanup function
@@ -145,8 +145,8 @@ pub fn DrawingCanvas() -> impl IntoView {
             context.line_to(x2, y2);
             context.set_line_cap("round");
             context.set_line_width(brush_size.get() as f64);
-            context.set_fill_style(&JsValue::from_str(&color.get()));
-            context.set_stroke_style(&JsValue::from_str(&color.get()));
+            context.set_fill_style_str(&color.get());
+            context.set_stroke_style_str(&color.get());
             context.stroke();
 
             // Send drawing event to server
@@ -362,35 +362,47 @@ pub fn DrawingCanvas() -> impl IntoView {
 
 // Helper function to generate a random user ID
 fn generate_user_id() -> String {
-    use web_sys::js_sys::Math;
-    format!("user-{}", (Math::random() * 10000.0) as u32)
+    cfg_if! {
+        if #[cfg(feature = "hydrate")] {
+            use web_sys::js_sys::Math;
+            format!("user-{}", (Math::random() * 10000.0) as u32)
+        } else {
+            return "server-side-user".to_string();
+        }
+    }
 }
 
 // Function to draw an event received from another user
-fn draw_event_on_canvas(canvas: &web_sys::HtmlCanvasElement, event: &DrawEvent) {
-    let context = canvas
-        .get_context("2d")
-        .unwrap()
-        .unwrap()
-        .dyn_into::<CanvasRenderingContext2d>()
-        .unwrap();
+fn draw_event_on_canvas(_canvas: &web_sys::HtmlCanvasElement, _event: &DrawEvent) {
+    cfg_if! {
+        if #[cfg(feature = "hydrate")] {
+            let context = _canvas
+                .get_context("2d")
+                .unwrap()
+                .unwrap()
+                .dyn_into::<CanvasRenderingContext2d>()
+                .unwrap();
 
-    match event.event_type.as_str() {
-        "line" => {
-            if let (Some(prev_x), Some(prev_y)) = (event.prev_x, event.prev_y) {
-                context.begin_path();
-                context.move_to(prev_x, prev_y);
-                context.line_to(event.x, event.y);
-                context.set_line_cap("round");
-                context.set_line_width(event.brush_size as f64);
-                let _ = context.set_fill_style(&JsValue::from_str(&event.color));
-                let _ = context.set_stroke_style(&JsValue::from_str(&event.color));
-                context.stroke();
+            match _event.event_type.as_str() {
+                "line" => {
+                    if let (Some(prev_x), Some(prev_y)) = (_event.prev_x, _event.prev_y) {
+                        context.begin_path();
+                        context.move_to(prev_x, prev_y);
+                        context.line_to(_event.x, _event.y);
+                        context.set_line_cap("round");
+                        context.set_line_width(_event.brush_size as f64);
+                        context.set_fill_style_str(&_event.color);
+                        context.set_stroke_style_str(&_event.color);
+                        context.stroke();
+                    }
+                }
+                "clear" => {
+                    context.clear_rect(0.0, 0.0, _canvas.width() as f64, _canvas.height() as f64);
+                }
+                _ => {}
             }
+        } else {
+            // No-op for server-side rendering
         }
-        "clear" => {
-            context.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
-        }
-        _ => {}
     }
 }
