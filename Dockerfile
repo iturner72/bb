@@ -1,5 +1,5 @@
 # Get started with a build env with Rust nightly
-FROM rustlang/rust:nightly-bullseye as builder
+FROM rustlang/rust:nightly-2025-03-15-bullseye as builder
 
 # If you’re using stable, use this instead
 # FROM rust:1.74-bullseye as builder
@@ -40,7 +40,10 @@ WORKDIR /app
 
 # -- NB: update binary name from "leptos_start" to match your app name in Cargo.toml --
 # Copy the server binary to the /app directory
-COPY --from=builder /app/target/release/bb /app/bb
+COPY --from=builder /app/target/release/bb /app/
+
+# Copy the download_models binary
+COPY --from=builder /app/target/release/download_models /app/
 
 # /target/site contains our JS/WASM/CSS, etc.
 COPY --from=builder /app/target/site /app/site
@@ -48,7 +51,9 @@ COPY --from=builder /app/target/site /app/site
 # Copy Cargo.toml if it’s needed at runtime
 COPY --from=builder /app/Cargo.toml /app/
 
-RUN chmod +x /app/bb
+RUN mkdir -p /app/models
+COPY ./scripts/start.sh /app/start.sh
+RUN chmod +x /app/start.sh
 
 # Set any required env variables and
 ENV RUST_LOG="info" \
@@ -61,5 +66,5 @@ EXPOSE 8080
 
 # -- NB: update binary name from "leptos_start" to match your app name in Cargo.toml --
 # Run the server
-CMD ["/app/bb"]
+CMD ["/app/start.sh"]
 
