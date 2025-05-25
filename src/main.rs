@@ -44,7 +44,6 @@ cfg_if! {
             let app_state = AppState {
                 leptos_options: leptos_options.clone(),
                 sse_state: SseState::new(),
-                tx: broadcast::Sender::new(100),
                 drawing_tx: broadcast::Sender::new(100),
                 user_count: Arc::new(Mutex::new(0)),
             };
@@ -66,6 +65,7 @@ cfg_if! {
                 .route("/api/create-stream", get(create_stream))
                 .route("/api/cancel-stream", get(cancel_stream))
                 .route("/api/rss-progress", get(rss_progress_handler))
+                .route("/api/rag-query", get(rag_query_handler))
                 .route("/api/backfill-progress", get(backfill_progress_handler))
                 .route("/api/refresh-summaries", get(refresh_summaries_handler))
                 .route("/api/generate-embeddings", get(embeddings_generation_handler))

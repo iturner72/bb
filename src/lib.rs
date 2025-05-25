@@ -8,6 +8,7 @@ pub mod embedding_service;
 pub mod embeddings_service;
 pub mod error_template;
 pub mod handlers;
+pub mod rag_service;
 pub mod rss_service;
 pub mod server_fn;
 pub mod state;

@@ -13,7 +13,10 @@ use std::task::{Context, Poll};
 use crate::{
     cancellable_sse::{create_cancellable_sse_stream, CancellableSseStream},
     state::AppState,
-    types::StreamResponse
+    types::StreamResponse,
+    rag_service::rag::rag::RagService,
+    components::search::SearchType,
+
 };
 
 pub struct SseStream {
@@ -138,3 +141,37 @@ pub async fn refresh_summaries_handler(
     ).await
 }
 
+
+// And add this handler function to src/handlers/sse.rs:
+pub async fn rag_query_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Sse<CancellableSseStream> {
+    let stream_id = params
+        .get("stream_id")
+        .cloned()
+        .expect("stream_id is required");
+
+    let query = params
+        .get("query")
+        .cloned()
+        .expect("query is required");
+
+    let search_type = params
+        .get("search_type")
+        .map(|s| match s.as_str() {
+            "openai" => SearchType::OpenAISemantic,
+            "local" => SearchType::LocalSemantic,
+            _ => SearchType::OpenAISemantic,
+        })
+        .unwrap_or(SearchType::OpenAISemantic);
+
+    create_cancellable_sse_stream(
+        state.sse_state,
+        stream_id,
+        move |tx, _token| async move {
+            let rag_service = RagService::new();
+            rag_service.process_query(query, search_type, tx).await
+        },
+    ).await
+}

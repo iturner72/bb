@@ -7,6 +7,7 @@ pub mod embeddings;
 pub mod footer;
 pub mod local_embeddings;
 pub mod poasts;
+pub mod rag_chat;
 pub mod rss_test;
 pub mod search;
 pub mod summary_refresh_processor;

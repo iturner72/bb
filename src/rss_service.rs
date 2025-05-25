@@ -22,7 +22,7 @@ use async_openai::{
 
 use crate::server_fn::{invalidate_poasts_cache, RssProgressUpdate};
 
-const STANDARD_ENTRY_LIMIT: usize = 5;
+const STANDARD_ENTRY_LIMIT: usize = 10;
 const EXTENDED_ENTRY_LIMIT: usize = 20;
 const EXTENDED_PROCESSING_THRESHOLD: Duration = Duration::days(14);
 
@@ -317,7 +317,7 @@ pub async fn get_post_insights(
 
     let content = response.choices[0].message.content.clone().unwrap_or_default();
 
-    log::info!("Raw OpenAI response for '{}': {}", title, content);
+    log::debug!("Raw OpenAI response for '{}': {}", title, content);
 
     match serde_json::from_str::<PostInsights>(&content) {
         Ok(insights) => Ok(insights),

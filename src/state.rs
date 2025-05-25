@@ -27,7 +27,6 @@ cfg_if! {
         pub struct AppState {
             pub leptos_options: LeptosOptions,
             pub sse_state: SseState,
-            pub tx: broadcast::Sender<String>,
             pub drawing_tx: broadcast::Sender<DrawEvent>,
             pub user_count: Arc<Mutex<usize>>,
 
@@ -35,12 +34,10 @@ cfg_if! {
 
         impl AppState {
             pub fn new(leptos_options: LeptosOptions) -> Self {
-                let (tx, _) = broadcast::channel(100);
                 let (drawing_tx, _) = broadcast::channel(100);
                 Self {
                     leptos_options,
                     sse_state: SseState::new(),
-                    tx,
                     drawing_tx,
                     user_count: Arc::new(Mutex::new(0))
                 }
