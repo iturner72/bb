@@ -10,12 +10,11 @@ pub mod local_llm {
     use tokenizers::Tokenizer;
     use std::sync::OnceLock;
     use thiserror::Error;
-    use log::{info, warn, error};
+    use log::{debug, info, warn, error};
     use std::path::PathBuf;
     use axum::response::sse::Event;
     use std::convert::Infallible;
     use tokio::sync::mpsc;
-    use serde::{Serialize, Deserialize};
     use anyhow::Result;
 
     use crate::rag_service::rag::rag::{RagResponse, Citation};
@@ -52,10 +51,10 @@ pub mod local_llm {
     impl Default for GenerationConfig {
         fn default() -> Self {
             Self {
-                max_new_tokens: 512,
-                temperature: 0.7,
-                top_p: 0.9,
-                repetition_penalty: 1.1,
+                max_new_tokens: 10,
+                temperature: 0.3,
+                top_p: 0.95,
+                repetition_penalty: 1.2,
                 seed: 42,
             }
         }
@@ -96,7 +95,7 @@ pub mod local_llm {
                 eos_token_id: Some(LlamaEosToks::Single(2)),
                 max_position_embeddings: 2048,
                 rope_scaling: None,
-                tie_word_embeddings: false,
+                tie_word_embeddings: true,
             };
 
             // Load model weights
@@ -146,18 +145,32 @@ pub mod local_llm {
             info!("Starting streaming generation for prompt length: {}", prompt.len());
 
             // Tokenize input
+            debug!("📝 Tokenizing input...");
             let encoding = self.tokenizer
                 .encode(prompt, true)
                 .map_err(LocalLLMError::TokenizerError)?;
             
             let input_ids = encoding.get_ids();
+            let max_length = 64; // Even smaller
+            let input_ids = if input_ids.len() > max_length {
+                warn!("Input too long ({}), truncating to {}", input_ids.len(), max_length);
+                &input_ids[..max_length]
+            } else {
+                input_ids
+            };
+    
+            debug!("🔢 Creating input tensor with {} tokens...", input_ids.len());
             let input_tensor = Tensor::new(input_ids, &self.device)?
                 .to_dtype(DType::U32)?
                 .unsqueeze(0)?;
 
-            info!("Input tokenized: {} tokens", input_ids.len());
+            debug!("Input tokenized: {} tokens", input_ids.len());
+
+            debug!("🧠 Initializing cache...");
+            let mut cache = Cache::new(true, DType::F32, &self.config, &self.device)?;
 
             // Initialize generation
+            debug!("🎯 Initializing logits processor...");
             let mut logits_processor = LogitsProcessor::new(
                 config.seed,
                 Some(config.temperature as f64),
@@ -166,16 +179,24 @@ pub mod local_llm {
 
             let mut generated_tokens = Vec::new();
             let mut current_tensor = input_tensor;
-            let mut cache = Cache::new(true, DType::F32, &self.config, &self.device)?;
+
+            debug!("✅ Setup complete, starting generation loop...");
 
             // Generation loop
             for step in 0..config.max_new_tokens {
+                debug!("🔄 Step {}: Starting forward pass with tensor shape: {:?}", step, current_tensor.dims());
+                let start_time = std::time::Instant::now();
                 // Forward pass
+                debug!("🧠 Calling model.forward...");
                 let logits = self.model.forward(&current_tensor, 0, &mut cache)?;
+                let forward_time = start_time.elapsed();
+                debug!("⚡ Forward pass completed in {:?}", forward_time);
                 let logits = logits.squeeze(0)?.to_dtype(DType::F32)?;
                 
                 // Get next token
                 let next_token = logits_processor.sample(&logits)?;
+                let elapsed = start_time.elapsed();
+                debug!("Generated token {} in {:?}: {}", step, elapsed, next_token);
                 generated_tokens.push(next_token);
 
                 // Check for EOS token
@@ -216,10 +237,10 @@ pub mod local_llm {
                     .unsqueeze(0)?;
 
                 // Small delay for better streaming experience
-                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
 
                 if step % 20 == 0 {
-                    info!("Generated {} tokens", step + 1);
+                    debug!("Generated {} tokens", step + 1);
                 }
             }
 
@@ -228,9 +249,9 @@ pub mod local_llm {
         }
 
         pub fn format_chat_prompt(&self, system: &str, user: &str, context: &str) -> String {
-            // Simple chat template format for SmolLM
+            // SmolLM2 uses this format
             format!(
-                "System: {}\n\nContext:\n{}\n\nUser: {}\n\nAssistant:",
+                "<|im_start|>system\n{}\n\nContext:\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
                 system, context, user
             )
         }
@@ -264,7 +285,7 @@ pub mod local_llm {
             }).await?;
 
             // Format prompt for the model
-            let system_prompt = "You are a helpful assistant that answers questions about cryptocurrency and blockchain blog posts. \
+            let system_prompt = "You are a helpful assistant that answers questions about blog posts. \
                 Use the provided context to answer the user's question concisely. Reference specific posts when relevant.";
 
             let formatted_prompt = self.llm_service.format_chat_prompt(
@@ -335,11 +356,17 @@ pub mod local_llm {
         // Collect response - fix the event data handling
         let mut full_response = String::new();
         while let Some(event_result) = rx.recv().await {
-            if let Ok(_event) = event_result {
-                // For testing, we'll just collect tokens as they come
-                // In real usage, the SSE stream handles this properly
-                full_response.push_str(".");
-                print!(".");
+            match event_result {
+                Ok(_event) => {
+                    // For testing, we'll just collect tokens as they come
+                    // In real usage, the SSE stream handles this properly
+                    full_response.push_str(".");
+                    print!(".");
+                }
+                Err(e) => {
+                    // Handle the error case if needed
+                    eprintln!("Error receiving event: {:?}", e);
+                }
             }
         }
 

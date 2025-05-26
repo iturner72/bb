@@ -109,8 +109,8 @@ pub mod rag {
 
             info!("Found {} relevant posts", relevant_posts.len());
 
-            // Step 3: Take top 10 and create citations
-            let top_posts: Vec<Poast> = relevant_posts.into_iter().take(10).collect();
+            // Step 3: Take top 5 and create citations
+            let top_posts: Vec<Poast> = relevant_posts.into_iter().take(5).collect();
             
             if top_posts.is_empty() {
                 self.send_response(&tx, RagResponse {
@@ -200,7 +200,7 @@ pub mod rag {
 
             let system_message = ChatCompletionRequestSystemMessage {
                 content: format!(
-                    "You are a helpful assistant that answers questions about cryptocurrency and blockchain blog posts. \
+                    "You are a helpful assistant that answers questions about blog posts. \
                     Use the provided context to answer the user's question. If the context doesn't contain enough \
                     information to answer the question, say so clearly. Always reference specific posts when relevant by \
                     mentioning the company name and post title. Be concise but informative. Format your response in markdown.\n\n\

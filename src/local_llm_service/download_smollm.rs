@@ -2,8 +2,7 @@
 //! SmolLM2-135M model downloader
 //! Downloads optimized SmolLM2-135M model files for local inference
 
-use log::{error, info};
-use sha2::{Digest, Sha256};
+use log::info;
 use std::fs;
 use std::path::PathBuf;
 use tokio::io::AsyncWriteExt;

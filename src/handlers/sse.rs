@@ -210,7 +210,6 @@ pub async fn local_llm_test_handler(
             use crate::local_llm_service::local_llm::local_llm::{LocalLLMService, GenerationConfig};
             use crate::rag_service::rag::rag::RagResponse;
             use axum::response::sse::Event;
-            use std::convert::Infallible;
             
             match LocalLLMService::init() {
                 Ok(_) => {
