@@ -19,6 +19,7 @@ pub mod rag {
     use crate::components::poasts::{semantic_search, Poast};
     use crate::components::search::SearchType;
     use crate::local_llm_service::local_llm::local_llm::{LocalRagService, LocalLLMError};
+    use crate::local_llm_service::download_llm_models::ModelType;
 
     #[derive(Debug, Serialize, Deserialize, Clone)]
     pub struct RagMessage {
@@ -69,7 +70,7 @@ pub mod rag {
         }
 
         pub fn new_local() -> Result<Self, LocalLLMError> {
-            let local_service = LocalRagService::new()?;
+            let local_service = LocalRagService::new(ModelType::SmolLM2135M)?;
             Ok(Self {
                 openai_client: None,
                 local_service: Some(local_service),

@@ -15,6 +15,7 @@ use crate::{
     state::AppState,
     types::StreamResponse,
     components::search::SearchType,
+    local_llm_service::download_llm_models::ModelType,
 
 };
 
@@ -211,7 +212,7 @@ pub async fn local_llm_test_handler(
             use crate::rag_service::rag::rag::RagResponse;
             use axum::response::sse::Event;
             
-            match LocalLLMService::init() {
+            match LocalLLMService::init(ModelType::SmolLM2135M) {
                 Ok(_) => {
                     if let Ok(service) = LocalLLMService::get_instance() {
                         let formatted_prompt = service.format_chat_prompt(

@@ -95,3 +95,91 @@ without one)
 ```bash
 RUST_LOG=debug cargo run --bin test_embedding --features ssr
 ```
+
+## Local embedding model download
+cargo run --bin download_models --features ssr
+
+# Local LLM Model Downloads
+
+This guide explains how to download and use different LLM models for local inference.
+
+## Available Models
+
+### SmolLM2-135M (Smallest, Fastest)
+- **Size**: ~270MB  
+- **Speed**: Very fast inference
+- **Quality**: Basic responses, good for testing
+- **Use case**: Development and testing
+
+### SmolLM2-1.7B (Medium)
+- **Size**: ~3.4GB
+- **Speed**: Fast inference  
+- **Quality**: Decent responses
+- **Use case**: Lightweight production
+
+### Llama 3.2-3B (Recommended for RAG)
+- **Size**: ~6GB
+- **Speed**: Good inference speed
+- **Quality**: Excellent reasoning and instruction following
+- **Use case**: Production RAG applications
+
+## Download Commands
+
+### Download Embedding Models
+```bash
+cargo run --bin download_models --features ssr
+```
+
+### Download LLM Models
+
+#### Download SmolLM2-135M (smallest, for testing)
+```bash
+cargo run --bin download_llm_models --features ssr -- --model smol-lm2-135m
+```
+
+#### Download SmolLM2-1.7B (medium size)
+```bash  
+cargo run --bin download_llm_models --features ssr -- --model smol-lm2-1-7b
+```
+
+#### Download Llama 3.2-3B (recommended for production RAG)
+```bash
+cargo run --bin download_llm_models --features ssr -- --model llama32-3b
+```
+
+## Model Selection Guide
+
+| Model | Size | RAM Usage | Speed | RAG Quality | Best For |
+|-------|------|-----------|-------|-------------|----------|
+| SmolLM2-135M | 270MB | ~1GB | Very Fast | Poor | Testing, Development |
+| SmolLM2-1.7B | 3.4GB | ~5GB | Fast | Fair | Lightweight Apps |
+| Llama 3.2-3B | 6GB | ~8GB | Good | Excellent | Production RAG |
+
+## Hardware Requirements
+
+- **Minimum RAM**: 8GB (for smallest model)
+- **Recommended RAM**: 16GB+ (for Llama 3.2-3B)
+- **Storage**: 1-10GB depending on model
+- **CPU**: Modern multi-core processor recommended
+
+## Usage After Download
+
+After downloading, the models will be available in the `models/` directory. Update your local LLM service configuration to use the desired model files.
+
+For Llama 3.2-3B, you'll need to update your service to use:
+- `llama32_3b_model.safetensors`
+- `llama32_3b_tokenizer.json` 
+- `llama32_3b_config.json`
+
+## Performance Tips
+
+1. **Start with SmolLM2-135M** for initial testing
+2. **Use Llama 3.2-3B** for production RAG applications
+3. **Monitor memory usage** - models load entirely into RAM
+4. **Consider quantization** for even smaller memory footprint
+
+## Troubleshooting
+
+- **Download fails**: Check internet connection and HuggingFace availability
+- **Out of memory**: Try a smaller model or increase system RAM
+- **Slow performance**: Ensure sufficient RAM and consider CPU optimization flags

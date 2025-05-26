@@ -19,8 +19,8 @@ name = "download_models"
 path = "src/bin/download_models.rs"
 
 [[bin]]
-name = "download_smollm"
-path = "src/bin/download_smollm.rs"
+name = "download_llm_models"
+path = "src/bin/download_llm_models.rs"
 
 [[bin]]
 name = "test_embedding"

@@ -848,7 +848,7 @@ pub async fn semantic_search(query: String, search_type: SearchType) -> Result<V
             };
     
             let similarity = cosine_similarity(&query_embedding, embedding_to_compare);
-            debug!("Similarity for {}: {}", post.link, similarity);
+//            debug!("Similarity for {}: {}", post.link, similarity);
             Some((post.link, similarity))
         })
         .collect();
