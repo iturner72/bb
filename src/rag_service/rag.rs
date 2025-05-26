@@ -10,15 +10,15 @@ pub mod rag {
     };
     use axum::response::sse::Event;
     use futures::StreamExt;
-    use log::{error, info};
+    use log::{error, info, warn};
     use serde::{Deserialize, Serialize};
     use std::convert::Infallible;
     use tokio::sync::mpsc;
     use anyhow::Result;
-    use anyhow::anyhow;
 
     use crate::components::poasts::{semantic_search, Poast};
     use crate::components::search::SearchType;
+    use crate::local_llm_service::local_llm::local_llm::{LocalRagService, LocalLLMError};
 
     #[derive(Debug, Serialize, Deserialize, Clone)]
     pub struct RagMessage {
@@ -44,18 +44,38 @@ pub mod rag {
         pub citations: Option<Vec<Citation>>,
     }
 
+    #[derive(Debug, Clone)]
+    pub enum LLMProvider {
+        OpenAI,
+        Local,
+    }
+
     pub struct RagService {
-        client: Client<OpenAIConfig>,
+        openai_client: Option<Client<OpenAIConfig>>,
+        local_service: Option<LocalRagService>,
+        provider: LLMProvider,
         model: String,
     }
 
     impl RagService {
-        pub fn new() -> Self {
+        pub fn new_openai() -> Self {
             let client = Client::new();
             Self {
-                client,
+                openai_client: Some(client),
+                local_service: None,
+                provider: LLMProvider::OpenAI,
                 model: "gpt-3.5-turbo".to_string(),
             }
+        }
+
+        pub fn new_local() -> Result<Self, LocalLLMError> {
+            let local_service = LocalRagService::new()?;
+            Ok(Self {
+                openai_client: None,
+                local_service: Some(local_service),
+                provider: LLMProvider::Local,
+                model: "phi-3.5-mini".to_string(),
+            })
         }
 
         pub async fn process_query(
@@ -64,7 +84,7 @@ pub mod rag {
             search_type: SearchType,
             tx: mpsc::Sender<Result<Event, Infallible>>,
         ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-            info!("Processing RAG query: {}", query);
+            info!("Processing RAG query with {:?} LLM: {}", self.provider, query);
 
             // Step 1: Send initial status
             self.send_response(&tx, RagResponse {
@@ -123,15 +143,23 @@ pub mod rag {
             // Step 5: Create context from posts
             let context = self.create_context(&top_posts);
             
-            // Step 6: Send status update
-            self.send_response(&tx, RagResponse {
-                message_type: "status".to_string(),
-                content: Some("Generating response...".to_string()),
-                citations: None,
-            }).await?;
-
-            // Step 7: Generate response using OpenAI
-            self.generate_streaming_response(query, context, tx).await?;
+            // Step 6: Generate response based on provider
+            match self.provider {
+                LLMProvider::OpenAI => {
+                    if let Some(ref client) = self.openai_client {
+                        self.generate_openai_response(query, context, tx, client).await?;
+                    } else {
+                        return Err("OpenAI client not initialized".into());
+                    }
+                }
+                LLMProvider::Local => {
+                    if let Some(ref local_service) = self.local_service {
+                        local_service.process_query(query, context, citations, tx).await?;
+                    } else {
+                        return Err("Local LLM service not initialized".into());
+                    }
+                }
+            }
 
             Ok(())
         }
@@ -150,23 +178,26 @@ pub mod rag {
                     context.push_str(&format!("Summary: {}\n", summary));
                 }
                 
-                // TODO: Add buzzwords when available
-                // if let Some(buzzwords) = &post.buzzwords {
-                //     context.push_str(&format!("Key topics: {}\n", buzzwords.join(", ")));
-                // }
-                
                 context.push_str(&format!("Link: {}\n\n", post.link));
             }
 
             context
         }
 
-        async fn generate_streaming_response(
+        async fn generate_openai_response(
             &self,
             query: String,
             context: String,
             tx: mpsc::Sender<Result<Event, Infallible>>,
+            client: &Client<OpenAIConfig>,
         ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            // Send status update
+            self.send_response(&tx, RagResponse {
+                message_type: "status".to_string(),
+                content: Some("Generating response with OpenAI...".to_string()),
+                citations: None,
+            }).await?;
+
             let system_message = ChatCompletionRequestSystemMessage {
                 content: format!(
                     "You are a helpful assistant that answers questions about cryptocurrency and blockchain blog posts. \
@@ -197,7 +228,7 @@ pub mod rag {
                 ..Default::default()
             };
 
-            let mut stream = self.client.chat().create_stream(request).await?;
+            let mut stream = client.chat().create_stream(request).await?;
 
             while let Some(result) = stream.next().await {
                 match result {
@@ -246,27 +277,21 @@ pub mod rag {
         }
     }
 
-    // Placeholder for future local LLM implementation
-    pub struct LocalRagService {
-        // TODO: Add local model fields when ready
-        // model: Option<LocalLLMModel>,
-    }
-
-    impl LocalRagService {
-        pub fn new() -> Result<Self> {
-            // TODO: Initialize local model
-            info!("Local RAG service not yet implemented - falling back to OpenAI");
-            Err(anyhow!("Local RAG service not yet implemented"))
-        }
-
-        pub async fn process_query(
-            &self,
-            _query: String,
-            _tx: mpsc::Sender<Result<Event, Infallible>>,
-        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-            // TODO: Implement local RAG processing
-            // This would follow similar pattern to RagService but use local model
-            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Local RAG service not yet implemented")))
+    // Factory function to create appropriate service
+    pub fn create_rag_service(use_local: bool) -> Result<RagService, Box<dyn std::error::Error + Send + Sync>> {
+        if use_local {
+            match RagService::new_local() {
+                Ok(service) => {
+                    info!("Successfully initialized local RAG service");
+                    Ok(service)
+                }
+                Err(e) => {
+                    warn!("Failed to initialize local RAG service: {}, falling back to OpenAI", e);
+                    Ok(RagService::new_openai())
+                }
+            }
+        } else {
+            Ok(RagService::new_openai())
         }
     }
 }

@@ -14,7 +14,6 @@ use crate::{
     cancellable_sse::{create_cancellable_sse_stream, CancellableSseStream},
     state::AppState,
     types::StreamResponse,
-    rag_service::rag::rag::RagService,
     components::search::SearchType,
 
 };
@@ -141,8 +140,6 @@ pub async fn refresh_summaries_handler(
     ).await
 }
 
-
-// And add this handler function to src/handlers/sse.rs:
 pub async fn rag_query_handler(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
@@ -166,12 +163,91 @@ pub async fn rag_query_handler(
         })
         .unwrap_or(SearchType::OpenAISemantic);
 
+    // Check if local LLM should be used
+    let use_local_llm = params
+        .get("llm_provider")
+        .map(|s| s == "local")
+        .unwrap_or(false);
+
     create_cancellable_sse_stream(
         state.sse_state,
         stream_id,
         move |tx, _token| async move {
-            let rag_service = RagService::new();
-            rag_service.process_query(query, search_type, tx).await
+            use crate::rag_service::rag::rag::create_rag_service;
+            
+            match create_rag_service(use_local_llm) {
+                Ok(rag_service) => {
+                    rag_service.process_query(query, search_type, tx).await
+                }
+                Err(e) => {
+                    log::error!("Failed to create RAG service: {}", e);
+                    Err(e)
+                }
+            }
+        },
+    ).await
+}
+
+// Add a new handler specifically for local LLM testing
+pub async fn local_llm_test_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Sse<CancellableSseStream> {
+    let stream_id = params
+        .get("stream_id")
+        .cloned()
+        .expect("stream_id is required");
+
+    let prompt = params
+        .get("prompt")
+        .cloned()
+        .unwrap_or_else(|| "What is cryptocurrency?".to_string());
+
+    create_cancellable_sse_stream(
+        state.sse_state,
+        stream_id,
+        move |tx, _token| async move {
+            use crate::local_llm_service::local_llm::local_llm::{LocalLLMService, GenerationConfig};
+            use crate::rag_service::rag::rag::RagResponse;
+            use axum::response::sse::Event;
+            use std::convert::Infallible;
+            
+            match LocalLLMService::init() {
+                Ok(_) => {
+                    if let Ok(service) = LocalLLMService::get_instance() {
+                        let formatted_prompt = service.format_chat_prompt(
+                            "You are a helpful assistant.",
+                            &prompt,
+                            "Test context for local LLM.",
+                        );
+                        
+                        let config = GenerationConfig::default();
+                        service.generate_streaming_response(formatted_prompt, tx, config).await
+                            .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn std::error::Error + Send + Sync>)
+                    } else {
+                        // Send error response
+                        let response = RagResponse {
+                            message_type: "error".to_string(),
+                            content: Some("Local LLM service not available".to_string()),
+                            citations: None,
+                        };
+                        let json = serde_json::to_string(&response).unwrap();
+                        let _ = tx.send(Ok(Event::default().data(json))).await;
+                        Ok(())
+                    }
+                }
+                Err(e) => {
+                    log::error!("Failed to initialize local LLM: {}", e);
+                    let response = RagResponse {
+                        message_type: "error".to_string(),
+                        content: Some(format!("Failed to initialize local LLM: {}", e)),
+                        citations: None,
+                    };
+                    let json = serde_json::to_string(&response).unwrap();
+                    let _ = tx.send(Ok(Event::default().data(json))).await;
+                    Ok(())
+                }
+            }
         },
     ).await
 }

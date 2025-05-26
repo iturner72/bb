@@ -8,6 +8,7 @@ use web_sys::{ErrorEvent, EventSource, MessageEvent};
 use crate::components::search::SearchType;
 use crate::types::StreamResponse;
 
+// Keep existing structs...
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RagMessage {
     pub role: String,
@@ -32,6 +33,12 @@ pub struct RagResponse {
     pub citations: Option<Vec<Citation>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LLMProvider {
+    OpenAI,
+    Local,
+}
+
 #[component]
 pub fn RagChat() -> impl IntoView {
     let (messages, set_messages) = signal::<Vec<RagMessage>>(Vec::new());
@@ -40,6 +47,7 @@ pub fn RagChat() -> impl IntoView {
     let (current_response, set_current_response) = signal(String::new());
     let (current_citations, set_current_citations) = signal::<Vec<Citation>>(Vec::new());
     let (search_type, set_search_type) = signal(SearchType::OpenAISemantic);
+    let (llm_provider, set_llm_provider) = signal(LLMProvider::OpenAI);
     let (current_stream_id, set_current_stream_id) = signal(Option::<String>::None);
     let (status_message, set_status_message) = signal(String::new());
 
@@ -108,16 +116,24 @@ pub fn RagChat() -> impl IntoView {
             let stream_id = stream_data.stream_id;
             set_current_stream_id(Some(stream_id.clone()));
 
-            // Start SSE connection
+            // Start SSE connection with LLM provider parameter
+            let search_type_param = match search_type.get() {
+                SearchType::OpenAISemantic => "openai",
+                SearchType::LocalSemantic => "local",
+                SearchType::Basic => "basic",
+            };
+
+            let llm_provider_param = match llm_provider.get() {
+                LLMProvider::OpenAI => "openai",
+                LLMProvider::Local => "local",
+            };
+
             let url = format!(
-                "/api/rag-query?stream_id={}&query={}&search_type={}",
+                "/api/rag-query?stream_id={}&query={}&search_type={}&llm_provider={}",
                 stream_id,
                 urlencoding::encode(&query),
-                match search_type.get() {
-                    SearchType::OpenAISemantic => "openai",
-                    SearchType::LocalSemantic => "local",
-                    SearchType::Basic => "basic",
-                }
+                search_type_param,
+                llm_provider_param,
             );
 
             let event_source = EventSource::new(&url).expect("Failed to connect to SSE endpoint");
@@ -236,12 +252,13 @@ pub fn RagChat() -> impl IntoView {
 
     view! {
         <div class="flex flex-col h-[700px] max-w-6xl mx-auto bg-white dark:bg-teal-800 rounded-lg shadow-lg">
-            // Header
+            // Header with enhanced controls
             <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-teal-700">
                 <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200">
                     "RAG Chat - Ask about blog posts"
                 </h2>
                 <div class="flex items-center space-x-3">
+                    // Search type selector
                     <select
                         class="px-3 py-1 text-sm rounded-md bg-gray-100 dark:bg-teal-700 
                         text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-teal-600"
@@ -258,6 +275,24 @@ pub fn RagChat() -> impl IntoView {
                         <option value="openai">"OpenAI Search"</option>
                         <option value="local">"Local Search"</option>
                     </select>
+
+                    // LLM provider selector
+                    <select
+                        class="px-3 py-1 text-sm rounded-md bg-gray-100 dark:bg-teal-700 
+                        text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-teal-600"
+                        on:change=move |ev| {
+                            let value = event_target_value(&ev);
+                            let new_provider = match value.as_str() {
+                                "local" => LLMProvider::Local,
+                                _ => LLMProvider::OpenAI,
+                            };
+                            set_llm_provider(new_provider);
+                        }
+                    >
+                        <option value="openai">"OpenAI LLM"</option>
+                        <option value="local">"Local LLM (SmolLM2)"</option>
+                    </select>
+
                     <button
                         class="px-3 py-1 text-sm bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors"
                         on:click=clear_chat
@@ -281,7 +316,23 @@ pub fn RagChat() -> impl IntoView {
                 </div>
             </div>
 
-            // Messages area
+            // Provider indicator
+            <div class="px-4 py-2 text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-teal-700">
+                {move || {
+                    let search = match search_type.get() {
+                        SearchType::OpenAISemantic => "OpenAI Search",
+                        SearchType::LocalSemantic => "Local Search",
+                        SearchType::Basic => "Basic Search",
+                    };
+                    let llm = match llm_provider.get() {
+                        LLMProvider::OpenAI => "OpenAI GPT-3.5",
+                        LLMProvider::Local => "Local SmolLM2-135M",
+                    };
+                    format!("Using {} + {}", search, llm)
+                }}
+            </div>
+
+            // Messages area (keep existing implementation)
             <div class="flex-1 overflow-y-auto p-4 space-y-4">
                 {move || {
                     if messages.get().is_empty() && !is_loading.get() {
@@ -292,7 +343,7 @@ pub fn RagChat() -> impl IntoView {
                                         "Ask me anything about the blog posts!"
                                     </p>
                                     <p class="text-sm">
-                                        "I can search through summaries and help you find relevant information."
+                                        "Choose between OpenAI or local SmolLM2-135M for generation."
                                     </p>
                                 </div>
                             </div>
@@ -310,7 +361,7 @@ pub fn RagChat() -> impl IntoView {
                         }
                             .into_any()
                     }
-                }} // Current response being streamed
+                }} // Current response being streamed (keep existing implementation)
                 {move || {
                     let current = current_response.get();
                     let citations = current_citations.get();
@@ -318,7 +369,6 @@ pub fn RagChat() -> impl IntoView {
                     if is_loading.get()
                         && (!current.is_empty() || !citations.is_empty() || !status.is_empty())
                     {
-
                         view! {
                             <div class="flex justify-start">
                                 <div class="max-w-4xl bg-gray-100 dark:bg-teal-700 rounded-lg p-4">
@@ -328,6 +378,12 @@ pub fn RagChat() -> impl IntoView {
                                                 <div class="text-sm text-gray-500 dark:text-gray-400 mb-3 italic flex items-center">
                                                     <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-500 mr-2"></div>
                                                     {status}
+                                                    <span class="ml-2 text-xs">
+                                                        {move || match llm_provider.get() {
+                                                            LLMProvider::Local => "(Local LLM)",
+                                                            LLMProvider::OpenAI => "(OpenAI)",
+                                                        }}
+                                                    </span>
                                                 </div>
                                             }
                                         })}
@@ -354,7 +410,7 @@ pub fn RagChat() -> impl IntoView {
                 }}
             </div>
 
-            // Input area
+            // Input area (keep existing implementation but update button text)
             <div class="p-4 border-t border-gray-200 dark:border-teal-700">
                 <div class="flex space-x-3">
                     <textarea
@@ -386,7 +442,15 @@ pub fn RagChat() -> impl IntoView {
                                 }
                                     .into_any()
                             } else {
-                                view! { <span>"Send"</span> }.into_any()
+                                view! {
+                                    <span>
+                                        {match llm_provider.get() {
+                                            LLMProvider::Local => "Send (Local)",
+                                            LLMProvider::OpenAI => "Send (OpenAI)",
+                                        }}
+                                    </span>
+                                }
+                                    .into_any()
                             }
                         }}
                     </button>
@@ -396,6 +460,7 @@ pub fn RagChat() -> impl IntoView {
     }
 }
 
+// Keep existing MessageBubble and CitationsList components unchanged...
 #[component]
 fn MessageBubble(message: RagMessage) -> impl IntoView {
     let is_user = message.role == "user";

@@ -19,6 +19,10 @@ name = "download_models"
 path = "src/bin/download_models.rs"
 
 [[bin]]
+name = "download_smollm"
+path = "src/bin/download_smollm.rs"
+
+[[bin]]
 name = "test_embedding"
 path = "src/bin/test_embedding.rs"
 
@@ -27,8 +31,16 @@ name = "test_local_insert"
 path = "src/bin/test_local_insert.rs"
 
 [[bin]]
+name = "test_local_llm"
+path = "src/bin/test_local_llm.rs"
+
+[[bin]]
 name = "model_inspector"
 path = "src/bin/model_inspector.rs"
+
+[[bin]]
+name = "inspect_smollm"
+path = "src/bin/inspect_smollm.rs"
 
 [dependencies]
 anyhow = "1.0.98"
@@ -37,8 +49,9 @@ argon2 = { version = "0.5.3", optional = true }
 axum = { version = "0.7.5", features = ["macros", "ws"], optional = true }
 axum-extra = { version = "0.9.6", features = ["cookie"], optional = true }
 base64 = { version = "0.22.1", optional = true }
-candle-core = { version = "0.8.3", optional = true }
-candle-nn = { version = "0.8.3", optional = true }
+candle-core = { version = "0.9.1", optional = true }
+candle-nn = { version = "0.9.1", optional = true }
+candle-transformers = { version = "0.9.1", optional = true }
 console_error_panic_hook = "0.1"
 cookie = { version = "0.18.1", optional = true }
 chrono = { version = "0.4.38", features = ["serde"] }
@@ -92,6 +105,7 @@ ssr = [
     "dep:cookie",
     "dep:candle-core",
     "dep:candle-nn",
+    "dep:candle-transformers",
     "dep:dashmap",
     "dep:feed-rs",
     "dep:futures",

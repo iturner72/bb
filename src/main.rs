@@ -66,6 +66,7 @@ cfg_if! {
                 .route("/api/cancel-stream", get(cancel_stream))
                 .route("/api/rss-progress", get(rss_progress_handler))
                 .route("/api/rag-query", get(rag_query_handler))
+                .route("/api/local-llm-test", get(local_llm_test_handler))
                 .route("/api/backfill-progress", get(backfill_progress_handler))
                 .route("/api/refresh-summaries", get(refresh_summaries_handler))
                 .route("/api/generate-embeddings", get(embeddings_generation_handler))

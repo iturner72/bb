@@ -8,6 +8,9 @@ pub mod embedding_service;
 pub mod embeddings_service;
 pub mod error_template;
 pub mod handlers;
+#[cfg(feature = "ssr")]
+pub mod local_llm_service;
+#[cfg(feature = "ssr")]
 pub mod rag_service;
 pub mod rss_service;
 pub mod server_fn;
