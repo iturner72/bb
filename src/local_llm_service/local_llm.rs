@@ -87,7 +87,7 @@ pub mod local_llm {
     #[derive(Debug, Clone)]
     pub struct ModelConfig {
         pub model_type: ModelType,
-        pub model_path: String,
+        pub model_paths: Vec<String>,  // Changed to support multiple files
         pub tokenizer_path: String,
         pub config_path: Option<String>,
         pub llama_config: LlamaConfig,
@@ -98,7 +98,7 @@ pub mod local_llm {
             match model_type {
                 ModelType::SmolLM2135M => Self {
                     model_type: model_type.clone(),
-                    model_path: "models/smollm_135m_model.safetensors".to_string(),
+                    model_paths: vec!["models/smollm_135m_model.safetensors".to_string()],
                     tokenizer_path: "models/smollm_135m_tokenizer.json".to_string(),
                     config_path: None,
                     llama_config: LlamaConfig {
@@ -120,7 +120,7 @@ pub mod local_llm {
                 },
                 ModelType::SmolLM21_7B => Self {
                     model_type: model_type.clone(),
-                    model_path: "models/smollm_1_7b_model.safetensors".to_string(),
+                    model_paths: vec!["models/smollm_1_7b_model.safetensors".to_string()],
                     tokenizer_path: "models/smollm_1_7b_tokenizer.json".to_string(),
                     config_path: None,
                     llama_config: LlamaConfig {
@@ -142,7 +142,11 @@ pub mod local_llm {
                 },
                 ModelType::Llama32_3B => Self {
                     model_type: model_type.clone(),
-                    model_path: "models/llama32_3b_model.safetensors".to_string(),
+                    // Updated to use the split model files
+                    model_paths: vec![
+                        "models/llama32_3b_model-00001-of-00002.safetensors".to_string(),
+                        "models/llama32_3b_model-00002-of-00002.safetensors".to_string(),
+                    ],
                     tokenizer_path: "models/llama32_3b_tokenizer.json".to_string(),
                     config_path: Some("models/llama32_3b_config.json".to_string()),
                     llama_config: LlamaConfig {
@@ -159,7 +163,7 @@ pub mod local_llm {
                         eos_token_id: Some(LlamaEosToks::Single(128001)),
                         max_position_embeddings: 131072,  // Much larger context
                         rope_scaling: None,
-                        tie_word_embeddings: false,  // Llama 3.2 doesn't tie embeddings
+                        tie_word_embeddings: true,  // Try setting this to true for Llama 3.2
                     },
                 },
             }
@@ -197,18 +201,36 @@ pub mod local_llm {
             let tokenizer = Tokenizer::from_file(&tokenizer_path)
                 .map_err(LocalLLMError::TokenizerError)?;
             
-            // Load model weights
-            info!("Loading model weights from: {}", model_config.model_path);
+            // Load model weights - handle both single and multiple files
+            info!("Loading model weights from {} file(s)", model_config.model_paths.len());
+            for path in &model_config.model_paths {
+                info!("  - {}", path);
+            }
+            
             unsafe {
+                // Convert Vec<String> to Vec<&str> for the API
+                let model_path_refs: Vec<&str> = model_config.model_paths
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect();
+                
                 let vb = VarBuilder::from_mmaped_safetensors(
-                    &[&model_config.model_path],
+                    &model_path_refs,
                     DType::F32,
                     &device,
                 )
-                .map_err(|e| LocalLLMError::InitError(e.to_string()))?;
+                .map_err(|e| LocalLLMError::InitError(format!("Failed to load model files: {}", e)))?;
                 
                 let model = Llama::load(vb, &model_config.llama_config)
                     .map_err(LocalLLMError::ModelError)?;
+                
+                info!("Successfully loaded {} with {} parameters", 
+                      model_config.get_model_name(),
+                      match model_config.model_type {
+                          ModelType::SmolLM2135M => "135M",
+                          ModelType::SmolLM21_7B => "1.7B", 
+                          ModelType::Llama32_3B => "3B",
+                      });
                 
                 Ok(Self {
                     model,

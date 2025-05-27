@@ -33,51 +33,55 @@ fn get_model_name(model_type: &bb::local_llm_service::download_llm_models::Model
     }
 }
 
-#[cfg(feature = "ssr")]
+// Always compile main function, but only use download functionality with ssr feature
 #[tokio::main]
 async fn main() {
-    dotenv().ok();
-    
-    // Initialize logger only if not already initialized
-    if env_logger::try_init().is_err() {
-        println!("Logger already initialized, continuing...");
+    #[cfg(not(feature = "ssr"))]
+    {
+        eprintln!("This binary requires the 'ssr' feature to be enabled.");
+        eprintln!("Run with: cargo run --bin download_llm_models --features ssr -- --model <MODEL>");
+        std::process::exit(1);
     }
-    
-    let args: Vec<String> = env::args().collect();
-    
-    // Parse command line arguments
-    let model_type = if args.len() >= 3 && args[1] == "--model" {
-        match parse_model_arg(&args[2]) {
-            Some(model) => model,
-            None => {
-                eprintln!("Error: Unknown model '{}'", args[2]);
-                print_usage();
+
+    #[cfg(feature = "ssr")]
+    {
+        dotenv().ok();
+        
+        // Initialize logger only if not already initialized
+        if env_logger::try_init().is_err() {
+            println!("Logger already initialized, continuing...");
+        }
+        
+        let args: Vec<String> = env::args().collect();
+        
+        // Parse command line arguments
+        let model_type = if args.len() >= 3 && args[1] == "--model" {
+            match parse_model_arg(&args[2]) {
+                Some(model) => model,
+                None => {
+                    eprintln!("Error: Unknown model '{}'", args[2]);
+                    print_usage();
+                    std::process::exit(1);
+                }
+            }
+        } else {
+            eprintln!("Error: Missing or invalid arguments");
+            print_usage();
+            std::process::exit(1);
+        };
+        
+        let model_name = get_model_name(&model_type);
+        log::info!("Starting {} model download...", model_name);
+        
+        match bb::local_llm_service::download_llm_models::download_model(model_type).await {
+            Ok(_) => {
+                log::info!("{} model downloaded successfully!", model_name);
+                log::info!("You can now use the local LLM service.");
+            }
+            Err(e) => {
+                log::error!("Failed to download model: {}", e);
                 std::process::exit(1);
             }
         }
-    } else {
-        eprintln!("Error: Missing or invalid arguments");
-        print_usage();
-        std::process::exit(1);
-    };
-    
-    let model_name = get_model_name(&model_type);
-    log::info!("Starting {} model download...", model_name);
-    
-    match bb::local_llm_service::download_llm_models::download_model(model_type).await {
-        Ok(_) => {
-            log::info!("{} model downloaded successfully!", model_name);
-            log::info!("You can now use the local LLM service.");
-        }
-        Err(e) => {
-            log::error!("Failed to download model: {}", e);
-            std::process::exit(1);
-        }
     }
-}
-
-#[cfg(not(feature = "ssr"))]
-fn main() {
-    eprintln!("This binary requires the 'ssr' feature");
-    std::process::exit(1);
 }

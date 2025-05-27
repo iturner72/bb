@@ -1,8 +1,9 @@
-//! src/local_llm_service/download_models.rs
+//! src/local_llm_service/download_llm_models.rs
 //! Multi-model downloader for local LLM inference
 //! Downloads various model files optimized for local inference
 
 use log::info;
+use std::env;
 use std::fs;
 use std::path::PathBuf;
 use tokio::io::AsyncWriteExt;
@@ -42,18 +43,39 @@ const SMOLLM_1_7B_FILES: [(&str, &str); 2] = [
 ];
 
 // Llama 3.2-3B model files (best quality for RAG)
-const LLAMA32_3B_FILES: [(&str, &str); 3] = [
+// Note: These URLs require authentication for gated models
+const LLAMA32_3B_FILES: [(&str, &str); 8] = [
     (
-        "llama32_3b_model.safetensors",
-        "https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct/resolve/main/model.safetensors",
+        "llama32_3b_model-00001-of-00002.safetensors",
+        "https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct/resolve/main/model-00001-of-00002.safetensors",
+    ),
+    (
+        "llama32_3b_model-00002-of-00002.safetensors",
+        "https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct/resolve/main/model-00002-of-00002.safetensors",
+    ),
+    (
+        "llama32_3b_model.safetensors.index.json",
+        "https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct/resolve/main/model.safetensors.index.json",
     ),
     (
         "llama32_3b_tokenizer.json", 
         "https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct/resolve/main/tokenizer.json",
     ),
     (
+        "llama32_3b_tokenizer_config.json",
+        "https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct/resolve/main/tokenizer_config.json",
+    ),
+    (
+        "llama32_3b_special_tokens_map.json",
+        "https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct/resolve/main/special_tokens_map.json",
+    ),
+    (
         "llama32_3b_config.json",
         "https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct/resolve/main/config.json",
+    ),
+    (
+        "llama32_3b_generation_config.json",
+        "https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct/resolve/main/generation_config.json",
     )
 ];
 
@@ -65,19 +87,34 @@ pub async fn download_model(model_type: ModelType) -> Result<(), Box<dyn std::er
     let models_dir = PathBuf::from("models");
     fs::create_dir_all(&models_dir)?;
     
-    let (files, model_name) = match model_type {
+    let (files, model_name, requires_auth) = match model_type {
         ModelType::SmolLM2135M => {
             info!("Downloading SmolLM2-135M model files...");
-            (&SMOLLM_135M_FILES[..], "SmolLM2-135M")
+            (&SMOLLM_135M_FILES[..], "SmolLM2-135M", false)
         }
         ModelType::SmolLM21_7B => {
             info!("Downloading SmolLM2-1.7B model files...");
-            (&SMOLLM_1_7B_FILES[..], "SmolLM2-1.7B")
+            (&SMOLLM_1_7B_FILES[..], "SmolLM2-1.7B", false)
         }
         ModelType::Llama32_3B => {
             info!("Downloading Llama 3.2-3B model files...");
-            (&LLAMA32_3B_FILES[..], "Llama 3.2-3B")
+            (&LLAMA32_3B_FILES[..], "Llama 3.2-3B", true)
         }
+    };
+    
+    // Get HuggingFace token if required
+    let hf_token = if requires_auth {
+        match env::var("HUGGINGFACE_TOKEN").or_else(|_| env::var("HF_TOKEN")) {
+            Ok(token) => {
+                info!("Using HuggingFace token for authentication");
+                Some(token)
+            }
+            Err(_) => {
+                return Err("HuggingFace token required for Llama models. Set HUGGINGFACE_TOKEN or HF_TOKEN environment variable.".into());
+            }
+        }
+    } else {
+        None
     };
     
     for (filename, url) in files {
@@ -89,7 +126,7 @@ pub async fn download_model(model_type: ModelType) -> Result<(), Box<dyn std::er
         }
         
         info!("Downloading {} from {}", filename, url);
-        download_with_progress(url, &file_path).await?;
+        download_with_progress(url, &file_path, hf_token.as_deref()).await?;
         info!("Successfully downloaded {}", filename);
     }
     
@@ -97,8 +134,35 @@ pub async fn download_model(model_type: ModelType) -> Result<(), Box<dyn std::er
     Ok(())
 }
 
-async fn download_with_progress(url: &str, file_path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    let response = reqwest::get(url).await?;
+async fn download_with_progress(
+    url: &str, 
+    file_path: &PathBuf, 
+    hf_token: Option<&str>
+) -> Result<(), Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+    let mut request_builder = client.get(url);
+    
+    // Add authorization header if token is provided
+    if let Some(token) = hf_token {
+        request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+    }
+    
+    let response = request_builder.send().await?;
+    
+    // Check if the request was successful
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        
+        if status == 401 {
+            return Err("Authentication failed. Please check your HuggingFace token and ensure you have access to the model.".into());
+        } else if status == 403 {
+            return Err("Access forbidden. Make sure you've accepted the model's license agreement on HuggingFace.".into());
+        } else {
+            return Err(format!("HTTP error {}: {}", status, error_text).into());
+        }
+    }
+    
     let total_size = response.content_length().unwrap_or(0);
     
     info!("Downloading {} bytes to {}", total_size, file_path.display());
