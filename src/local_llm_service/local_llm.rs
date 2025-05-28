@@ -305,9 +305,9 @@ pub mod local_llm {
             
             // Dynamic context limits based on model
             let max_input_length = match self.model_config.model_type {
-                ModelType::SmolLM2135M => 512,      // Smaller context for tiny model
-                ModelType::SmolLM21_7B => 1024,     // Medium context
-                ModelType::Llama32_3B => 4096,      // Large context for best model
+                ModelType::SmolLM2135M => 5,      // Smaller context for tiny model
+                ModelType::SmolLM21_7B => 10,     // Medium context
+                ModelType::Llama32_3B => 20,      // Large context for best model
             };
             
             let input_ids = if input_ids.len() > max_input_length {

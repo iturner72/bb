@@ -70,7 +70,7 @@ pub mod rag {
         }
 
         pub fn new_local() -> Result<Self, LocalLLMError> {
-            let local_service = LocalRagService::new(ModelType::Llama32_3B)?;
+            let local_service = LocalRagService::new(ModelType::SmolLM2135M)?;
             Ok(Self {
                 openai_client: None,
                 local_service: Some(local_service),
