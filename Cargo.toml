@@ -32,7 +32,7 @@ path = "src/bin/model_inspector.rs"
 
 [dependencies]
 anyhow = "1.0.98"
-async-openai = { version = "0.25", optional = true }
+async-openai = { version = "0.28.2", optional = true }
 argon2 = { version = "0.5.3", optional = true }
 axum = { version = "0.7.5", features = ["macros", "ws"], optional = true }
 axum-extra = { version = "0.9.6", features = ["cookie"], optional = true }

@@ -307,7 +307,7 @@ pub async fn get_post_insights(
             user_message.into(),
         ],
         response_format: Some(ResponseFormat::JsonObject),
-        max_tokens: Some(400),
+        max_completion_tokens: Some(400),
         ..Default::default()
     };
 
