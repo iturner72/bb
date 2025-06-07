@@ -46,6 +46,12 @@ pub mod rag {
         model: String,
     }
 
+    impl Default for RagService {
+        fn default() -> Self {
+            Self::new()        
+        }
+    }
+
     impl RagService {
         pub fn new() -> Self {
             let client = Client::new();
@@ -86,7 +92,7 @@ pub mod rag {
         ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             // TODO: Implement local RAG processing
             // This would follow similar pattern to RagService but use local model
-            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Local RAG service not yet implemented")))
+            Err(Box::new(std::io::Error::other("Local RAG service not yet implemented")))
         }
     }
 
@@ -139,13 +145,19 @@ pub mod rag {
             #[derive(Debug, Serialize, Deserialize)]
             pub struct SemanticSearchArgs {
                 pub query: String,
-                pub search_type: String, // "openai" or "local"
+                pub search_type: Option<String>, // "openai" or "local"
                 pub limit: Option<u32>,
             }
         
             pub struct EnhancedRagService {
                 client: Client<OpenAIConfig>,
                 model: String,
+            }
+
+            impl Default for EnhancedRagService {
+                fn default() -> Self {
+                    Self::new()        
+                }
             }
         
             impl EnhancedRagService {
@@ -403,7 +415,7 @@ pub mod rag {
                         }
                         "semantic_search_posts" => {
                             let args: SemanticSearchArgs = serde_json::from_str(&tool_call.function.arguments)?;
-                            let search_type = match args.search_type.as_str() {
+                            let search_type = match args.search_type.as_deref().unwrap_or("openai") {
                                 "local" => SearchType::LocalSemantic,
                                 _ => SearchType::OpenAISemantic,
                             };
@@ -516,7 +528,7 @@ pub mod rag {
                     for result in function_results {
                         context.push_str(&format!("- {}\n", result));
                     }
-                    context.push_str("\n");
+                    context.push('\n');
         
                     context.push_str("Retrieved blog posts:\n\n");
         
@@ -606,7 +618,7 @@ pub mod rag {
                 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     let json = serde_json::to_string(&response)?;
                     tx.send(Ok(Event::default().data(json))).await
-                        .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn std::error::Error + Send + Sync>)?;
+                        .map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error + Send + Sync>)?;
                     Ok(())
                 }
         

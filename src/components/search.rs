@@ -85,7 +85,7 @@ pub fn BlogSearch(#[prop(into)] on_search: Callback<SearchParams>) -> impl IntoV
                             "local" => SearchType::LocalSemantic,
                             _ => SearchType::Basic,
                         };
-                        set_search_type.set(new_type.clone());
+                        set_search_type.set(new_type);
                         handle_search(search_term.get(), new_type);
                     }
                     prop:value=move || match search_type.get() {

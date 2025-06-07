@@ -253,7 +253,7 @@ pub async fn process_feeds_with_progress(
 
     // invalidate poasts cache to see new results immediately
     invalidate_poasts_cache().await.map_err(|e| {
-        Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn Error + Send + Sync>
+        Box::new(std::io::Error::other(e.to_string())) as Box<dyn Error + Send + Sync>
     })?;
     
     progress_sender
