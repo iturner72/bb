@@ -6,6 +6,7 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{ErrorEvent, EventSource, MessageEvent};
 
 use crate::components::search::SearchType;
+use crate::components::markdown::MarkdownRenderer;
 use crate::types::StreamResponse;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -318,10 +319,9 @@ pub fn RagChat() -> impl IntoView {
                     if is_loading.get()
                         && (!current.is_empty() || !citations.is_empty() || !status.is_empty())
                     {
-
                         view! {
-                            <div class="flex justify-start">
-                                <div class="max-w-4xl bg-gray-100 dark:bg-teal-700 rounded-lg p-4">
+                            <div class="w-full">
+                                <div class="w-full max-w-none bg-gray-100 dark:bg-teal-700 rounded-lg p-4">
                                     {(!status.is_empty())
                                         .then(|| {
                                             view! {
@@ -336,8 +336,8 @@ pub fn RagChat() -> impl IntoView {
                                     {(!current.is_empty())
                                         .then(|| {
                                             view! {
-                                                <div class="text-gray-800 dark:text-gray-200 whitespace-pre-wrap prose prose-sm dark:prose-invert max-w-none">
-                                                    {current}
+                                                <div class="text-gray-800 dark:text-gray-200 w-full">
+                                                    <MarkdownRenderer content=current class="" />
                                                     <span class="animate-pulse text-seafoam-600 dark:text-seafoam-400">
                                                         "|"
                                                     </span>
@@ -401,23 +401,37 @@ fn MessageBubble(message: RagMessage) -> impl IntoView {
     let is_user = message.role == "user";
     
     view! {
-        <div class=format!("flex {}", if is_user { "justify-end" } else { "justify-start" })>
+        <div class="w-full">
             <div class=format!(
-                "max-w-4xl rounded-lg p-4 {}",
+                "w-full rounded-lg p-4 {}",
                 if is_user {
-                    "bg-seafoam-600 dark:bg-seafoam-500 text-white"
+                    "bg-seafoam-600 dark:bg-seafoam-500 text-white ml-auto max-w-4xl"
                 } else {
-                    "bg-gray-100 dark:bg-teal-700 text-gray-800 dark:text-gray-200"
+                    "bg-gray-100 dark:bg-teal-700 text-gray-800 dark:text-gray-200 max-w-none"
                 },
             )>
-                <div class=format!(
-                    "whitespace-pre-wrap {}",
-                    if is_user { "" } else { "prose prose-sm dark:prose-invert max-w-none" },
-                )>{message.content}</div>
-
+                {move || {
+                    if is_user {
+                        view! {
+                            <div class="whitespace-pre-wrap text-left">
+                                {message.content.clone()}
+                            </div>
+                        }
+                            .into_any()
+                    } else {
+                        view! {
+                            <div class="w-full text-left">
+                                <MarkdownRenderer content=message.content.clone() class="" />
+                            </div>
+                        }
+                            .into_any()
+                    }
+                }}
                 {message.citations.map(|citations| view! { <CitationsList citations=citations /> })}
 
-                <div class="text-xs opacity-70 mt-2">{format_timestamp(&message.timestamp)}</div>
+                <div class="text-xs opacity-70 mt-2 text-left">
+                    {format_timestamp(&message.timestamp)}
+                </div>
             </div>
         </div>
     }
@@ -427,7 +441,7 @@ fn MessageBubble(message: RagMessage) -> impl IntoView {
 fn CitationsList(citations: Vec<Citation>) -> impl IntoView {
     view! {
         <div class="mt-4 pt-3 border-t border-gray-300 dark:border-teal-600">
-            <div class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3">
+            <div class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3 text-left">
                 {format!("Sources ({}):", citations.len())}
             </div>
             <div class="grid gap-2 max-h-48 overflow-y-auto">
@@ -436,7 +450,7 @@ fn CitationsList(citations: Vec<Citation>) -> impl IntoView {
                     key=|citation| citation.link.clone()
                     children=move |citation| {
                         view! {
-                            <div class="text-xs bg-white dark:bg-teal-800 rounded-md p-3 border border-gray-200 dark:border-teal-600 hover:border-seafoam-400 dark:hover:border-seafoam-500 transition-colors">
+                            <div class="text-xs bg-white dark:bg-teal-800 rounded-md p-3 border border-gray-200 dark:border-teal-600 hover:border-seafoam-400 dark:hover:border-seafoam-500 transition-colors text-left">
                                 <a
                                     href=citation.link.clone()
                                     target="_blank"
@@ -467,7 +481,7 @@ fn CitationsList(citations: Vec<Citation>) -> impl IntoView {
 }
 
 fn format_timestamp(timestamp: &str) -> String {
-    // Simple timestamp formatting - you could enhance this with proper date parsing
     let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_str(timestamp));
     date.to_locale_string("en-US", &js_sys::Object::new()).as_string().unwrap_or_else(|| timestamp.to_string())
 }
+
