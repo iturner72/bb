@@ -1,5 +1,5 @@
 use crate::components::auth_nav::AuthNav;
-use crate::components::canvas::DrawingCanvas;
+use crate::components::canvas::OTDrawingCanvas;
 use crate::components::footer::Footer;
 use leptos::prelude::*;
 
@@ -15,14 +15,14 @@ pub fn DrawingPage() -> impl IntoView {
                 >
                     "bryptoblogs"
                 </a>
-                <AuthNav/>
+                <AuthNav />
             </div>
 
             <div class="container mx-auto py-6">
-                <DrawingCanvas/>
+                <OTDrawingCanvas />
             </div>
 
-            <Footer/>
+            <Footer />
         </div>
     }
 }

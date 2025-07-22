@@ -6,3 +6,7 @@ pub use sse::*;
 mod drawing_ws;
 #[cfg(feature = "ssr")]
 pub use drawing_ws::*;
+#[cfg(feature = "ssr")]
+mod canvas_ws;
+#[cfg(feature = "ssr")]
+pub use canvas_ws::*;

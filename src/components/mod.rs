@@ -1,6 +1,7 @@
 pub mod auth_nav;
 pub mod batch_processor;
 pub mod canvas;
+pub mod canvas_sync;
 pub mod dark_mode_toggle;
 pub mod drawing;
 pub mod embeddings;

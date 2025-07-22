@@ -46,6 +46,7 @@ cfg_if! {
                 sse_state: SseState::new(),
                 drawing_tx: broadcast::Sender::new(100),
                 user_count: Arc::new(Mutex::new(0)),
+                canvas_manager: Some(CanvasRoomManager::new()),
             };
 
             async fn server_fn_handler(
@@ -77,7 +78,7 @@ cfg_if! {
                     "/api/*fn_name",
                     get(server_fn_handler).post(server_fn_handler),
                 )
-                .route("/ws/drawing", get(drawing_ws_handler))
+                .route("/ws/canvas/:room_id", get(canvas_ws_handler))
                 .merge(protected_routes)
                 .leptos_routes_with_handler(routes, get(|State(app_state): State<AppState>, request: Request<AxumBody>| async move {
                     let handler = leptos_axum::render_app_to_stream_with_context(
