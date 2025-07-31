@@ -20,7 +20,7 @@ const MODEL_FILES: [(&str, &str, &str); 2] = [
 async fn download_and_verify() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
-    let models_dir = PathBuf::from("models");
+    let models_dir = PathBuf::from("ml_models");
     fs::create_dir_all(&models_dir)?;
 
     for (filename, url, expected_hash) in MODEL_FILES {

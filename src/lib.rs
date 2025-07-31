@@ -8,8 +8,11 @@ pub mod embedding_service;
 pub mod embeddings_service;
 pub mod error_template;
 pub mod handlers;
+pub mod models;
 pub mod rag_service;
 pub mod rss_service;
+#[cfg(feature = "ssr")]
+pub mod schema;
 pub mod server_fn;
 pub mod state;
 pub mod summary_refresh_service;

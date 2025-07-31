@@ -116,13 +116,13 @@ pub mod embeddings_local {
             info!("Using device: {:?}", device);
 
             info!("Loading tokenizer");
-            let tokenizer = Tokenizer::from_file("models/tokenizer.json")
+            let tokenizer = Tokenizer::from_file("ml_models/tokenizer.json")
                 .map_err(EmbeddingError::TokenizerError)?;
 
             unsafe {
                 info!("Loading model weights");
                 let vb = VarBuilder::from_mmaped_safetensors(
-                    &["models/model.safetensors"],
+                    &["ml_models/model.safetensors"],
                     DType::F32,
                     &device,
                 )
