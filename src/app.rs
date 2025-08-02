@@ -56,7 +56,7 @@ pub fn App() -> impl IntoView {
                 <Route path=path!("admin-panel") view=ProtectedAdminPanel />
                 <Route path=path!("draw") view=DrawingPage />
                 <Route path=path!("rooms") view=RoomsPage />
-                <Route path=path!("rooms/:room_id") view=RoomPage />
+                <Route path=path!("room/:room_id") view=RoomPage />
             </FlatRoutes>
         </Router>
     }

@@ -1,5 +1,7 @@
 use leptos::prelude::*;
+use leptos_router::hooks::use_navigate;
 use uuid::Uuid;
+use std::sync::Arc;
 
 use crate::models::{CanvasRoomView, CreateRoomView, JoinRoomView};
 use super::drawing_rooms::*;
@@ -10,6 +12,11 @@ pub fn RoomBrowser() -> impl IntoView {
     let (show_create_form, set_show_create_form) = signal(false);
     let (join_code, set_join_code) = signal(String::new());
     let (current_room, set_current_room) = signal(None::<Uuid>);
+
+    let navigate = use_navigate();
+    
+    // Wrap navigate in Arc to make it thread-safe and shareable
+    let navigate_arc = Arc::new(navigate);
 
     // Room list resource
     let rooms = Resource::new(
@@ -30,6 +37,20 @@ pub fn RoomBrowser() -> impl IntoView {
         }
     });
 
+    // Clone the Arc for the Effect
+    {
+        let navigate_for_effect = navigate_arc.clone();
+        Effect::new(move |_| {
+            if let Some(Ok(room_details)) = join_room_action.value().get() {
+                let room_id = room_details.room.id;
+                set_current_room(Some(room_id));
+                navigate_for_effect(&format!("/room/{}", room_id), Default::default());
+            } else if let Some(Err(e)) = join_room_action.value().get() {
+                log::error!("Failed to join room: {}", e);
+            }
+        });
+    }
+
     let quick_join = move |_: web_sys::MouseEvent| {
         let code = join_code.get().trim().to_uppercase();
         if !code.is_empty() {
@@ -37,6 +58,10 @@ pub fn RoomBrowser() -> impl IntoView {
             set_join_code(String::new());
         }
     };
+
+    // Clone Arc for use in view closures
+    let navigate_for_create = navigate_arc.clone();
+    let navigate_for_rooms = navigate_arc.clone();
 
     view! {
         <div class="max-w-6xl mx-auto p-6 space-y-6">
@@ -99,23 +124,26 @@ pub fn RoomBrowser() -> impl IntoView {
                 </div>
             </div>
 
-            // Create room form
+            // Create room form - now uses Arc, thread-safe
             {move || {
                 show_create_form
                     .get()
                     .then(|| {
+                        let nav = navigate_for_create.clone();
                         view! {
                             <CreateRoomForm on_created=Callback::new(move |room: CanvasRoomView| {
-                                set_current_room(Some(room.id));
+                                let room_id = room.id;
+                                set_current_room(Some(room_id));
                                 set_show_create_form(false);
                                 refresh_rooms();
+                                nav(&format!("/room/{}", room_id), Default::default());
                             }) />
                         }
                             .into_any()
                     })
             }}
 
-            // Rooms list
+            // Rooms list - now uses Arc, thread-safe
             <div class="bg-white dark:bg-teal-800 p-4 rounded-lg shadow-md">
                 <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
                     "Public Rooms"
@@ -131,9 +159,10 @@ pub fn RoomBrowser() -> impl IntoView {
                         .into_any()
                 }>
                     {move || {
+                        let nav = navigate_for_rooms.clone();
                         rooms
                             .get()
-                            .map(|result| {
+                            .map(move |result| {
                                 match result {
                                     Ok(room_list) => {
                                         if room_list.is_empty() {
@@ -151,12 +180,15 @@ pub fn RoomBrowser() -> impl IntoView {
                                                         each=move || room_list.clone()
                                                         key=|room_item| room_item.room.id
                                                         children=move |room_item| {
+                                                            let nav_for_card = nav.clone();
                                                             view! {
                                                                 <RoomCard
                                                                     room_item=room_item.clone()
                                                                     on_join=Callback::new(move |room_id| {
-                                                                        log::info!("Joining room: {}", room_id);
-                                                                        set_current_room(Some(room_id));
+                                                                        nav_for_card(
+                                                                            &format!("/room/{}", room_id),
+                                                                            Default::default(),
+                                                                        );
                                                                     })
                                                                 />
                                                             }
@@ -199,7 +231,6 @@ pub fn RoomBrowser() -> impl IntoView {
                                 <p class="text-xs opacity-90">{room_id.to_string()}</p>
                             </div>
                         }
-                            .into_any()
                     })
             }}
         </div>
@@ -377,7 +408,7 @@ fn CreateRoomForm(
                 }}
             </div>
         </div>
-    }.into_any()
+    }
 }
 
 #[component]
@@ -442,5 +473,5 @@ fn RoomCard(
                 {if can_join { "Join Room" } else { "Room Full" }}
             </button>
         </div>
-    }.into_any()
+    }
 }
