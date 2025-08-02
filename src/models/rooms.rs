@@ -7,7 +7,7 @@ pub struct CanvasRoomView {
     pub id: Uuid,
     pub room_code: String,
     pub name: String,
-    pub created_by: i32,
+    pub created_by: Option<i32>,
     pub max_players: Option<i32>,
     pub is_private: Option<bool>,
     pub game_mode: Option<String>,
@@ -68,16 +68,20 @@ pub struct CreateSessionView {
 cfg_if! {
     if #[cfg(feature = "ssr")] {
         use crate::schema::*;
+        use crate::models::User;
+        use crate::models::GameTeam;
         use chrono::NaiveDateTime;
         use diesel::prelude::*;
+        use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
-        #[derive(Debug, Serialize, Deserialize, Queryable, Identifiable)]
+        #[derive(Debug, Clone, Serialize, Deserialize, Queryable, Identifiable, Selectable, Associations)]
+        #[diesel(belongs_to(User, foreign_key = created_by))]
         #[diesel(table_name = canvas_rooms)]
         pub struct CanvasRoom {
             pub id: Uuid,
             pub room_code: String,
             pub name: String,
-            pub created_by: i32,
+            pub created_by: Option<i32>,
             pub max_players: Option<i32>,
             pub is_private: Option<bool>,
             pub game_mode: Option<String>,
@@ -98,7 +102,9 @@ cfg_if! {
             pub settings: Option<serde_json::Value>,
         }
 
-        #[derive(Debug, Serialize, Deserialize, Queryable, Identifiable)]
+        #[derive(Debug, Serialize, Deserialize, Queryable, Identifiable, Selectable, Associations)]
+        #[diesel(belongs_to(CanvasRoom, foreign_key = room_id))]
+        #[diesel(belongs_to(User, foreign_key = user_id))]
         #[diesel(table_name = room_players)]
         pub struct RoomPlayer {
             pub id: Uuid,
@@ -118,7 +124,8 @@ cfg_if! {
             pub role: Option<String>,
         }
 
-        #[derive(Debug, Serialize, Deserialize, Queryable, Identifiable)]
+        #[derive(Debug, Serialize, Deserialize, Queryable, Identifiable, Associations)]
+        #[diesel(belongs_to(CanvasRoom, foreign_key = room_id))]
         #[diesel(table_name = game_sessions)]
         pub struct GameSession {
             pub id: Uuid,
@@ -154,6 +161,138 @@ cfg_if! {
             pub fn can_join(&self, current_players: usize) -> bool {
                 !self.is_full(current_players)
             }
+
+            pub async fn find_by_code(room_code: &str, conn: &mut AsyncPgConnection) -> QueryResult<Option<CanvasRoom>> {
+                canvas_rooms::table
+                    .filter(canvas_rooms::room_code.eq(room_code))
+                    .first(conn)
+                    .await
+                    .optional()
+            }
+
+            pub async fn active_player_count(&self, conn: &mut AsyncPgConnection) -> QueryResult<i64> {
+                room_players::table
+                    .filter(room_players::room_id.eq(self.id))
+                    .filter(room_players::is_active.eq(true))
+                    .count()
+                    .get_result(conn)
+                    .await
+            }
+
+            pub async fn has_active_player(&self, user_id: i32, conn: &mut AsyncPgConnection) -> QueryResult<bool> {
+                let count: i64 = room_players::table
+                    .filter(room_players::room_id.eq(self.id))
+                    .filter(room_players::user_id.eq(user_id))
+                    .filter(room_players::is_active.eq(true))
+                    .count()
+                    .get_result(conn)
+                    .await?;
+                Ok(count > 0)
+            }
+
+            pub async fn add_player(&self, user_id: i32, role: Option<String>, conn: &mut AsyncPgConnection) -> QueryResult<RoomPlayer> {
+                let new_player = NewRoomPlayer {
+                    room_id: self.id,
+                    user_id,
+                    role,
+                };
+            
+                diesel::insert_into(room_players::table)
+                    .values(&new_player)
+                    .returning(room_players::all_columns)
+                    .get_result(conn)
+                    .await
+            }
+
+            pub async fn active_players(&self, conn: &mut AsyncPgConnection) -> QueryResult<Vec<RoomPlayer>> {
+                RoomPlayer::belonging_to(self)
+                    .filter(room_players::is_active.eq(true))
+                    .load(conn)
+                    .await
+            }
+
+            pub async fn current_session(&self, conn: &mut AsyncPgConnection) -> QueryResult<Option<GameSession>> {
+                GameSession::belonging_to(self)
+                    .filter(game_sessions::status.ne("finished"))
+                    .order_by(game_sessions::created_at.desc())
+                    .first(conn)
+                    .await
+                    .optional()
+            }
+
+            pub async fn list_public_with_player_counts(conn: &mut AsyncPgConnection) -> QueryResult<Vec<CanvasRoomView>> {
+                let rooms = canvas_rooms::table
+                    .filter(canvas_rooms::is_private.eq(false))
+                    .order_by(canvas_rooms::created_at.desc())
+                    .load::<CanvasRoom>(conn)
+                    .await?;
+
+                let mut room_views = Vec::new();
+                for room in rooms {
+                    let player_count = room.active_players(conn).await?.len();
+                    room_views.push(CanvasRoomView {
+                        player_count,
+                        ..room.into()
+                    });
+                }
+
+                Ok(room_views)
+            }
+
+            pub async fn get_with_details(&self, conn: &mut AsyncPgConnection) -> QueryResult<RoomWithPlayersView> {
+                // Get active players with user data
+                let players_data = room_players::table
+                    .left_join(users::table.on(room_players::user_id.eq(users::id)))
+                    .filter(room_players::room_id.eq(self.id))
+                    .filter(room_players::is_active.eq(true))
+                    .select((
+                        RoomPlayer::as_select(),
+                        users::id.nullable(),
+                        users::username.nullable(),
+                        users::display_name.nullable(),
+                        users::avatar_url.nullable(),
+                    ))
+                    .load::<(RoomPlayer, Option<i32>, Option<String>, Option<String>, Option<String>)>(conn)
+                    .await?;
+            
+                let players: Vec<RoomPlayerView> = players_data
+                    .into_iter()
+                    .map(|(player, user_id, username, display_name, avatar_url)| {
+                        let mut player_view: RoomPlayerView = player.into();
+                        
+                        // If we have a user_id, then we have user data (left join matched)
+                        if let Some(id) = user_id {
+                            player_view.user = Some(crate::models::users::UserView {
+                                id,
+                                external_id: "".to_string(),
+                                provider: "".to_string(),
+                                email: None,
+                                username,
+                                display_name,
+                                avatar_url,
+                                preferred_brush_color: None,
+                                preferred_brush_size: None,
+                                drawing_privacy: None,
+                            });
+                        }
+            
+                        player_view
+                    })
+                    .collect();
+            
+                // Get current session
+                let current_session = self.current_session(conn).await?.map(|session| session.into());
+            
+                // Create room view with player count - clone self before converting
+                let mut room_view: CanvasRoomView = (*self).clone().into();
+                room_view.player_count = players.len();
+            
+                Ok(RoomWithPlayersView {
+                    room: room_view,
+                    players,
+                    current_session,
+                })
+            }
         }
 
         impl GameSession {
@@ -163,6 +302,43 @@ cfg_if! {
 
             pub fn is_finished(&self) -> bool {
                 self.status.as_deref() == Some("finished")
+            }
+
+            pub async fn teams(&self, conn: &mut AsyncPgConnection) -> QueryResult<Vec<GameTeam>> {
+                GameTeam::belonging_to(self).load(conn).await
+            }
+
+            pub async fn room(&self, conn: &mut AsyncPgConnection) -> QueryResult<CanvasRoom> {
+                canvas_rooms::table.find(self.room_id).first(conn).await
+            }
+        }
+
+        impl RoomPlayer {
+            pub async fn user(&self, conn: &mut AsyncPgConnection) -> QueryResult<User> {
+                users::table.find(self.user_id).first(conn).await
+            }
+
+            pub async fn room(&self, conn: &mut AsyncPgConnection) -> QueryResult<CanvasRoom> {
+                canvas_rooms::table.find(self.room_id).first(conn).await
+            }
+
+            pub async fn leave_room(
+                user_id: i32,
+                room_id: Uuid,
+                conn:&mut AsyncPgConnection
+            ) -> QueryResult<usize> {
+                diesel::update(
+                    room_players::table
+                        .filter(room_players::room_id.eq(room_id))
+                        .filter(room_players::user_id.eq(user_id))
+                        .filter(room_players::is_active.eq(true))
+                )
+                .set((
+                    room_players::is_active.eq(false),
+                    room_players::left_at.eq(chrono::Utc::now().naive_utc()),
+                ))
+                .execute(conn)
+                .await
             }
         }
 

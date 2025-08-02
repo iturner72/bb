@@ -4,6 +4,8 @@ pub mod backfill_service;
 #[cfg(feature = "ssr")]
 pub mod cancellable_sse;
 pub mod components;
+#[cfg(feature = "ssr")]
+pub mod database;
 pub mod embedding_service;
 pub mod embeddings_service;
 pub mod error_template;

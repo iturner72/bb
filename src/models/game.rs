@@ -69,11 +69,16 @@ pub struct CanvasGalleryView {
 
 cfg_if! {
     if #[cfg(feature = "ssr")] {
-        use crate::schema::*;
         use chrono::NaiveDateTime;
         use diesel::prelude::*;
 
-        #[derive(Debug, Serialize, Deserialize, Queryable, Identifiable)]
+        use crate::schema::*;
+        use crate::models::User;
+        use crate::models::GameSession;
+        use crate::models::CanvasRoom;
+
+        #[derive(Debug, Serialize, Deserialize, Queryable, Identifiable, Associations)]
+        #[diesel(belongs_to(GameSession, foreign_key = session_id))]
         #[diesel(table_name = game_teams)]
         pub struct GameTeam {
             pub id: Uuid,
@@ -92,8 +97,11 @@ cfg_if! {
             pub color: Option<String>,
         }
 
-        #[derive(Debug, Serialize, Deserialize, Queryable)]
+        #[derive(Debug, Serialize, Deserialize, Queryable, Identifiable, Associations)]
+        #[diesel(belongs_to(GameTeam, foreign_key = team_id))]
+        #[diesel(belongs_to(User, foreign_key = user_id))]
         #[diesel(table_name = team_players)]
+        #[diesel(primary_key(team_id, user_id))]
         pub struct TeamPlayer {
             pub team_id: Uuid,
             pub user_id: i32,
@@ -107,8 +115,10 @@ cfg_if! {
             pub user_id: i32,
         }
 
-        #[derive(Debug, Serialize, Deserialize, Queryable)]
+        #[derive(Debug, Serialize, Deserialize, Queryable, Identifiable, Associations)]
+        #[diesel(belongs_to(User, foreign_key = user_id))]
         #[diesel(table_name = user_game_stats)]
+        #[diesel(primary_key(user_id))]
         pub struct UserGameStats {
             pub user_id: i32,
             pub games_played: Option<i32>,
@@ -136,7 +146,10 @@ cfg_if! {
             pub favorite_game_mode: Option<String>,
         }
 
-        #[derive(Debug, Serialize, Deserialize, Queryable, Identifiable)]
+        #[derive(Debug, Serialize, Deserialize, Queryable, Identifiable, Associations)]
+        #[diesel(belongs_to(CanvasRoom, foreign_key = room_id))]
+        #[diesel(belongs_to(GameSession, foreign_key = session_id))]
+        #[diesel(belongs_to(User, foreign_key = created_by))]
         #[diesel(table_name = saved_canvases)]
         pub struct SavedCanvas {
             pub id: Uuid,

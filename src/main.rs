@@ -20,6 +20,7 @@ cfg_if! {
         use std::net::SocketAddr;
         use bb::app::*;
         use bb::auth::server::middleware::require_auth;
+        use bb::database::db::establish_connection;
         use bb::state::AppState;
         use bb::handlers::*;
         use bb::cancellable_sse::*;
@@ -41,8 +42,12 @@ cfg_if! {
             let _ = std::env::var("ADMIN_PASSWORD_HASH")
                 .expect("ADMIN_PASSWORD_HASH must be set");
 
+            let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+            let pool = establish_connection(&database_url).expect("failed to create database pool");
+
             let app_state = AppState {
                 leptos_options: leptos_options.clone(),
+                pool,
                 sse_state: SseState::new(),
                 drawing_tx: broadcast::Sender::new(100),
                 user_count: Arc::new(Mutex::new(0)),
