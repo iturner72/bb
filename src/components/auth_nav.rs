@@ -2,6 +2,7 @@ use leptos::{prelude::*, task::spawn_local};
 
 use crate::auth::{verify_token, auth_components::LogoutButton};
 use crate::components::dark_mode_toggle::DarkModeToggle;
+use crate::components::theme_selector::ThemeSelector;
 
 #[component]
 pub fn AuthNav() -> impl IntoView {
@@ -31,35 +32,36 @@ pub fn AuthNav() -> impl IntoView {
                 } else if is_authenticated() {
                     view! {
                         <>
-                            <a 
+                            <a
                                 href="/admin-panel"
                                 class="text-teal-600 dark:text-aqua-400 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors duration-200"
                             >
                                 "Admin"
                             </a>
-                            <LogoutButton/>
+                            <LogoutButton />
                         </>
-                    }.into_any()
+                    }
+                        .into_any()
                 } else {
                     view! {
-                        <a 
+                        <a
                             href="/admin"
                             class="text-teal-600 dark:text-aqua-400 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors duration-200"
                         >
                             "Login"
                         </a>
-                    }.into_any()
+                    }
+                        .into_any()
                 }
             }}
-            <a 
-                href="https://github.com/iturner72/bb" 
+            <a
+                href="https://github.com/iturner72/bb"
                 class="text-teal-600 dark:text-aqua-400 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors duration-200"
                 target="_blank"
                 rel="noopener noreferrer"
             >
                 "github"
-            </a>
-            <DarkModeToggle />
+            </a> <ThemeSelector /> <DarkModeToggle />
         </div>
     }
 }

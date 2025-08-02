@@ -16,3 +16,5 @@ pub mod room_page;
 pub mod rss_test;
 pub mod search;
 pub mod summary_refresh_processor;
+pub mod theme_selector;
+

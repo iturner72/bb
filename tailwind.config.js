@@ -2,7 +2,7 @@
 /*
     * run this 
     * npx tailwindcss -i ./style/tailwind.css -o ./style/output.css --watch
-    * */
+    */
 module.exports = {
   content: {
     files: ["*.html", "./src/**/*.rs"],
@@ -14,113 +14,106 @@ module.exports = {
       current: 'currentColor',
       'white': '#ffffff',
       'black': '#000000',
-
-      'gray': {
-        DEFAULT: '#DCE9E6',
-        900: '#233833',
-        800: '#467066',
-        700: '#6da497',
-        600: '#a5c6bf',
-        500: '#dce9e6',
-        400: '#e3eeeb',
-        300: '#eaf2f0',
-        200: '#f1f6f5',
-        100: '#f8fbfa'
-      },
-
-      'teal': {
-        DEFAULT: '#042F2E',
-        900: '#010909',
-        800: '#021312',
-        700: '#021c1c',
-        600: '#032625',
-        500: '#042f2e',
-        400: '#0b8381',
-        300: '#13d8d5',
-        200: '#56f0ee',
-        100: '#abf8f6'
-      },
-
-      'mint': {
-        DEFAULT: '#CCFBF1',
-        900: '#075443',
-        800: '#0ea887',
-        700: '#23edc1',
-        600: '#77f4d9',
-        500: '#ccfbf1',
-        400: '#d5fcf3',
-        300: '#e0fcf6',
-        200: '#eafdf9',
-        100: '#f5fefc'
-      },
-
-      'seafoam': {
-        DEFAULT: '#206D5F',
-        900: '#061613',
-        800: '#0d2c27',
-        700: '#13423a',
-        600: '#1a594d',
-        500: '#206d5f',
-        400: '#31a892',
-        300: '#54cdb7',
-        200: '#8ddecf',
-        100: '#c6eee7'
-      },
-
-      'wenge': {
-        DEFAULT: '#715F58',
-        900: '#161312',
-        800: '#2d2623',
-        700: '#433935',
-        600: '#594b46',
-        500: '#715f58',
-        400: '#917c74',
-        300: '#ad9d96',
-        200: '#c8beb9',
-        100: '#e4dedc'
-      },
-
-      'aqua': {
-        DEFAULT: '#00AAA8',
-        900: '#002221',
-        800: '#004342',
-        700: '#006563',
-        600: '#008784',
-        500: '#00aaa8',
-        400: '#00ede9',
-        300: '#32fffc',
-        200: '#76fffd',
-        100: '#bbfffe'
-      },
-
-      'salmon': {
-        DEFAULT: '#FDA4AF',
-        900: '#52020b',
-        800: '#a40316',
-        700: '#f60521',
-        600: '#fb5367',
-        500: '#fda4af',
-        400: '#feb7bf',
-        300: '#fec9cf',
-        200: '#fedbdf',
-        100: '#ffedef'
-      },
       
-      // Custom colors for similarity indicators
+      // Use CSS custom properties - these will be defined in your CSS
+      'gray': {
+        DEFAULT: 'var(--color-gray)',
+        900: 'var(--color-gray-900)',
+        800: 'var(--color-gray-800)',
+        700: 'var(--color-gray-700)',
+        600: 'var(--color-gray-600)',
+        500: 'var(--color-gray-500)',
+        400: 'var(--color-gray-400)',
+        300: 'var(--color-gray-300)',
+        200: 'var(--color-gray-200)',
+        100: 'var(--color-gray-100)'
+      },
+      'teal': {
+        DEFAULT: 'var(--color-teal)',
+        900: 'var(--color-teal-900)',
+        800: 'var(--color-teal-800)',
+        700: 'var(--color-teal-700)',
+        600: 'var(--color-teal-600)',
+        500: 'var(--color-teal-500)',
+        400: 'var(--color-teal-400)',
+        300: 'var(--color-teal-300)',
+        200: 'var(--color-teal-200)',
+        100: 'var(--color-teal-100)'
+      },
+      'mint': {
+        DEFAULT: 'var(--color-mint)',
+        900: 'var(--color-mint-900)',
+        800: 'var(--color-mint-800)',
+        700: 'var(--color-mint-700)',
+        600: 'var(--color-mint-600)',
+        500: 'var(--color-mint-500)',
+        400: 'var(--color-mint-400)',
+        300: 'var(--color-mint-300)',
+        200: 'var(--color-mint-200)',
+        100: 'var(--color-mint-100)'
+      },
+      'seafoam': {
+        DEFAULT: 'var(--color-seafoam)',
+        900: 'var(--color-seafoam-900)',
+        800: 'var(--color-seafoam-800)',
+        700: 'var(--color-seafoam-700)',
+        600: 'var(--color-seafoam-600)',
+        500: 'var(--color-seafoam-500)',
+        400: 'var(--color-seafoam-400)',
+        300: 'var(--color-seafoam-300)',
+        200: 'var(--color-seafoam-200)',
+        100: 'var(--color-seafoam-100)'
+      },
+      'wenge': {
+        DEFAULT: 'var(--color-wenge)',
+        900: 'var(--color-wenge-900)',
+        800: 'var(--color-wenge-800)',
+        700: 'var(--color-wenge-700)',
+        600: 'var(--color-wenge-600)',
+        500: 'var(--color-wenge-500)',
+        400: 'var(--color-wenge-400)',
+        300: 'var(--color-wenge-300)',
+        200: 'var(--color-wenge-200)',
+        100: 'var(--color-wenge-100)'
+      },
+      'aqua': {
+        DEFAULT: 'var(--color-aqua)',
+        900: 'var(--color-aqua-900)',
+        800: 'var(--color-aqua-800)',
+        700: 'var(--color-aqua-700)',
+        600: 'var(--color-aqua-600)',
+        500: 'var(--color-aqua-500)',
+        400: 'var(--color-aqua-400)',
+        300: 'var(--color-aqua-300)',
+        200: 'var(--color-aqua-200)',
+        100: 'var(--color-aqua-100)'
+      },
+      'salmon': {
+        DEFAULT: 'var(--color-salmon)',
+        900: 'var(--color-salmon-900)',
+        800: 'var(--color-salmon-800)',
+        700: 'var(--color-salmon-700)',
+        600: 'var(--color-salmon-600)',
+        500: 'var(--color-salmon-500)',
+        400: 'var(--color-salmon-400)',
+        300: 'var(--color-salmon-300)',
+        200: 'var(--color-salmon-200)',
+        100: 'var(--color-salmon-100)'
+      },
       'aquamarine': {
-        DEFAULT: '#2dd4bf',
-        light: '#99f6e4',
-        dark: '#0d9488'
+        DEFAULT: 'var(--color-aquamarine)',
+        light: 'var(--color-aquamarine-light)',
+        dark: 'var(--color-aquamarine-dark)'
       },
       'purple': {
-        DEFAULT: '#a78bfa',
-        light: '#c4b5fd',
-        dark: '#7c3aed'
+        DEFAULT: 'var(--color-purple)',
+        light: 'var(--color-purple-light)',
+        dark: 'var(--color-purple-dark)'
       },
       'orange': {
-        DEFAULT: '#fb923c',
-        light: '#fdba74',
-        dark: '#ea580c'
+        DEFAULT: 'var(--color-orange)',
+        light: 'var(--color-orange-light)',
+        dark: 'var(--color-orange-dark)'
       },
     },
     extend: {

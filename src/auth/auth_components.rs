@@ -1,13 +1,11 @@
+use cfg_if::cfg_if;
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
-use leptos_router::{
-    components::A,
-    NavigateOptions
-};
-use cfg_if::cfg_if;
+use leptos_router::{components::A, NavigateOptions};
 
 use super::api::{AdminLoginFn, LogoutFn};
 use crate::components::dark_mode_toggle::DarkModeToggle;
+use crate::components::theme_selector::ThemeSelector;
 
 #[component]
 pub fn AdminLogin() -> impl IntoView {
@@ -15,15 +13,18 @@ pub fn AdminLogin() -> impl IntoView {
     let (password, set_password) = signal(String::new());
     let (error, set_error) = signal(Option::<String>::None);
     let navigate = use_navigate();
-    
+
     let login_action = ServerAction::<AdminLoginFn>::new();
-    
+
     Effect::new(move |_| {
         if let Some(Ok(_)) = login_action.value().get() {
-            navigate("/admin-panel", NavigateOptions {
-                replace: true,
-                ..NavigateOptions::default()
-            });
+            navigate(
+                "/admin-panel",
+                NavigateOptions {
+                    replace: true,
+                    ..NavigateOptions::default()
+                },
+            );
         } else if let Some(Err(e)) = login_action.value().get() {
             set_error.set(Some(e.to_string()));
         }
@@ -36,13 +37,14 @@ pub fn AdminLogin() -> impl IntoView {
                     <h2 class="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
                         "Admin Login"
                     </h2>
-                    
+
                     <form on:submit=move |ev| {
                         ev.prevent_default();
-                        login_action.dispatch(AdminLoginFn {
-                            username: username.get(),
-                            password: password.get()
-                        });
+                        login_action
+                            .dispatch(AdminLoginFn {
+                                username: username.get(),
+                                password: password.get(),
+                            });
                     }>
                         <div class="space-y-4">
                             <div>
@@ -55,15 +57,15 @@ pub fn AdminLogin() -> impl IntoView {
                                 <input
                                     type="text"
                                     id="username"
-                                    class="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 
-                                           bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100
-                                           focus:border-seafoam-500 dark:focus:border-seafoam-400 focus:outline-none
-                                           focus:ring-1 focus:ring-seafoam-500 dark:focus:ring-seafoam-400"
+                                    class="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600
+                                    bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100
+                                    focus:border-seafoam-500 dark:focus:border-seafoam-400 focus:outline-none
+                                    focus:ring-1 focus:ring-seafoam-500 dark:focus:ring-seafoam-400"
                                     on:input=move |ev| set_username(event_target_value(&ev))
                                     prop:value=username
                                 />
                             </div>
-                            
+
                             <div>
                                 <label
                                     for="password"
@@ -75,32 +77,40 @@ pub fn AdminLogin() -> impl IntoView {
                                     type="password"
                                     id="password"
                                     class="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600
-                                           bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100
-                                           focus:border-seafoam-500 dark:focus:border-seafoam-400 focus:outline-none
-                                           focus:ring-1 focus:ring-seafoam-500 dark:focus:ring-seafoam-400"
+                                    bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100
+                                    focus:border-seafoam-500 dark:focus:border-seafoam-400 focus:outline-none
+                                    focus:ring-1 focus:ring-seafoam-500 dark:focus:ring-seafoam-400"
                                     on:input=move |ev| set_password(event_target_value(&ev))
                                     prop:value=password
                                 />
                             </div>
 
-                            {move || error.get().map(|err| view! {
-                                <div class="mt-2 text-sm text-red-600 dark:text-red-400">
-                                    {err}
-                                </div>
-                            })}
+                            {move || {
+                                error
+                                    .get()
+                                    .map(|err| {
+                                        view! {
+                                            <div class="mt-2 text-sm text-red-600 dark:text-red-400">
+                                                {err}
+                                            </div>
+                                        }
+                                    })
+                            }}
 
                             <button
                                 type="submit"
                                 class="w-full rounded-md bg-seafoam-600 dark:bg-seafoam-500 px-4 py-2 text-sm
-                                       font-medium text-white hover:bg-seafoam-700 dark:hover:bg-seafoam-600
-                                       focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-seafoam-400
-                                       focus:ring-offset-2 disabled:opacity-50"
+                                font-medium text-white hover:bg-seafoam-700 dark:hover:bg-seafoam-600
+                                focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-seafoam-400
+                                focus:ring-offset-2 disabled:opacity-50"
                                 prop:disabled=login_action.pending()
                             >
-                                {move || if login_action.pending().get() {
-                                    "Logging in..."
-                                } else {
-                                    "Log in"
+                                {move || {
+                                    if login_action.pending().get() {
+                                        "Logging in..."
+                                    } else {
+                                        "Log in"
+                                    }
                                 }}
                             </button>
                         </div>
@@ -125,37 +135,34 @@ pub fn LogoutButton() -> impl IntoView {
 
     view! {
         <button
-            class="px-4 py-2 bg-seafoam-500 dark:bg-seafoam-600 text-mint-400 rounded 
-                   hover:bg-seafoam-400 dark:hover:bg-seafoam-500 transition-colors
-                   disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
+            class="px-4 py-2 bg-seafoam-500 dark:bg-seafoam-600 text-mint-400 rounded
+            hover:bg-seafoam-400 dark:hover:bg-seafoam-500 transition-colors
+            disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
             on:click=move |_| {
                 logout_action.dispatch(LogoutFn {});
             }
         >
-    "Logout"
-</button>
+            "Logout"
+        </button>
     }
 }
 
 #[component]
-pub fn ProtectedRoute<F, C>(
-    fallback: F,
-    children: C,
-) -> impl IntoView 
+pub fn ProtectedRoute<F, C>(fallback: F, children: C) -> impl IntoView
 where
     F: Fn() -> AnyView + Send + 'static,
     C: Fn() -> AnyView + Send + 'static,
 {
     let (is_authenticated, set_is_authenticated) = signal(false);
     let (is_checking, set_is_checking) = signal(true);
-    
+
     cfg_if! {
         if #[cfg(feature = "hydrate")] {
         let navigate = use_navigate();
         use super::api::verify_token;
             let location = location();
             let (attempted_path, set_attempted_path) = signal(String::new());
-            
+
             Effect::new(move |_| {
                 if let Ok(path) = location.pathname() {
                     set_attempted_path.set(path);
@@ -221,19 +228,23 @@ where
                     >
                         "home"
                     </A>
-                    <LogoutButton/>
-                    <DarkModeToggle/>
+                    <LogoutButton />
+                    <ThemeSelector />
+                    <DarkModeToggle />
                 </div>
             </div>
             {move || {
                 match (is_checking.get(), is_authenticated.get()) {
-                    (true, _) => view! {
-                        <div class="flex justify-center items-center h-[calc(100vh-5rem)]">
-                            <div class="animate-pulse text-seafoam-600 dark:text-aqua-400">
-                                "Verifying access..."
+                    (true, _) => {
+                        view! {
+                            <div class="flex justify-center items-center h-[calc(100vh-5rem)]">
+                                <div class="animate-pulse text-seafoam-600 dark:text-aqua-400">
+                                    "Verifying access..."
+                                </div>
                             </div>
-                        </div>
-                    }.into_any(),
+                        }
+                            .into_any()
+                    }
                     (false, true) => children(),
                     (false, false) => fallback(),
                 }
@@ -241,4 +252,3 @@ where
         </div>
     }
 }
-
