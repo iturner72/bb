@@ -45,7 +45,7 @@ RUN cargo build --bin download_models --release --features=ssr
 
 FROM debian:bullseye-slim as runtime
 RUN apt-get update -y \
-  && apt-get install -y --no-install-recommends openssl ca-certificates libssl3 pkg-config \
+  && apt-get install -y --no-install-recommends openssl ca-certificates libssl1.1 pkg-config \
   && apt-get autoremove -y \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/*
