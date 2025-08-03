@@ -1,5 +1,6 @@
 use leptos::prelude::*;
 use serde::{Serialize, Deserialize};
+use server_fn::codec::GetUrl;
 use std::borrow::Cow;
 
 use crate::components::search::{BlogSearch, SearchParams, SearchType};
@@ -37,7 +38,11 @@ pub struct Links {
     pub logo_url: Option<String>,
 }
 
-#[server(GetCompanies, "/api")]
+#[server(
+    prefix = "/api",
+    endpoint = "get_companies",
+    input = GetUrl
+)]
 pub async fn get_companies() -> Result<Vec<String>, ServerFnError> {
     use crate::supabase::get_client;
     use log::{debug, error};
@@ -104,7 +109,11 @@ pub struct PostFilter {
     pub company: Option<String>,
 }
 
-#[server(GetPoasts, "/api")]
+#[server(
+    prefix = "/api",
+    endpoint = "get_poasts",
+    input = GetUrl
+)]
 pub async fn get_poasts(filter: Option<PostFilter>) -> Result<Vec<Poast>, ServerFnError> {
     use crate::supabase::get_client;
     use serde_json::from_str;
@@ -738,7 +747,11 @@ async fn get_openai_embedding(query: &str) -> Result<Vec<f32>, ServerFnError> {
         .map(|response| response.data[0].embedding.clone())
 }
 
-#[server(SearchPosts, "/api")]
+#[server(
+    prefix = "/api",
+    endpoint = "semantic_search",
+    input = GetUrl
+)]
 pub async fn semantic_search(query: String, search_type: SearchType) -> Result<Vec<Poast>, ServerFnError> {
     use crate::embeddings_service::embeddings_local::LocalEmbeddingService;
     use log::{info, warn, error, debug};

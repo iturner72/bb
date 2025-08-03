@@ -1,10 +1,15 @@
 use leptos::{prelude::*, task::spawn_local};
+use server_fn::codec::{GetUrl, PostUrl};
 use web_sys::window;
 
 #[cfg(feature = "ssr")]
 const DARK_MODE_COOKIE: &str = "bb_dark_mode";
 
-#[server(SetDarkModeCookie, "/api")]
+#[server(
+    prefix = "/api",
+    endpoint = "set_dark_mode_cookie",
+    input = PostUrl
+ )]
 pub async fn set_dark_mode_cookie(is_dark: bool) -> Result<(), ServerFnError> {
     use crate::auth::{AuthError, to_server_error};
     use axum_extra::extract::cookie::{Cookie, SameSite};
@@ -30,7 +35,11 @@ pub async fn set_dark_mode_cookie(is_dark: bool) -> Result<(), ServerFnError> {
     Ok(())
 }
 
-#[server(GetDarkModeCookie, "/api")]
+#[server(
+    prefix = "/api",
+    endpoint = "get_dark_mode_cookie",
+    input = GetUrl,
+)]
 pub async fn get_dark_mode_cookie() -> Result<Option<bool>, ServerFnError> {
     use crate::auth::{AuthError, to_server_error};
     use leptos_axum::extract;
@@ -67,14 +76,8 @@ pub fn DarkModeToggle() -> impl IntoView {
     };
 
     view! {
-        <button
-            on:click=toggle_dark_mode
-        >
-            {move || if is_dark.get() {
-                "🌞"
-            } else {
-                "🌙"
-            }}
+        <button on:click=toggle_dark_mode>
+            {move || if is_dark.get() { "🌞" } else { "🌙" }}
         </button>
     }
 }

@@ -1,10 +1,10 @@
-// src/components/room_page.rs
 use leptos::prelude::*;
+use leptos_router::hooks::use_navigate;
 use uuid::Uuid;
 
 use crate::components::{
     canvas::OTDrawingCanvas,
-    drawing_rooms::get_room_details,
+    drawing_rooms::{get_room_details, leave_room},
 };
 use crate::models::RoomWithPlayersView;
 
@@ -148,7 +148,7 @@ pub fn DrawingRoomPage(
                             let room_data = current_room_data.get().unwrap();
                             view! {
                                 <div class="w-80 bg-white dark:bg-teal-800 border-l border-gray-200 dark:border-teal-700 p-4 overflow-y-auto">
-                                    <PlayersPanel room_data=room_data />
+                                    <PlayersPanel room_data=room_data room_id=room_id />
                                 </div>
                             }
                                 .into_any()
@@ -160,9 +160,30 @@ pub fn DrawingRoomPage(
 }
 
 #[component]
-fn PlayersPanel(room_data: RoomWithPlayersView) -> impl IntoView {
+fn PlayersPanel(
+    room_data: RoomWithPlayersView,
+    #[prop(into)] room_id: Signal<Option<Uuid>>,
+) -> impl IntoView {
     let players = room_data.players;
     let room = room_data.room;
+    let navigate = use_navigate();
+
+    let leave_room_action = Action::new(move |room_id: &Uuid| {
+        let id = *room_id;
+        async move { leave_room(id).await }
+    });
+
+    Effect::new(move |_| {
+        if let Some(Ok(())) = leave_room_action.value().get() {
+            navigate("/rooms", Default::default());
+        }
+    });
+
+    let handle_leave_room = move |_| {
+        if let Some(id) = room_id.get() {
+            leave_room_action.dispatch(id);
+        }
+    };
 
     view! {
         <div class="space-y-6">
@@ -192,6 +213,68 @@ fn PlayersPanel(room_data: RoomWithPlayersView) -> impl IntoView {
                         </span>
                     </div>
                 </div>
+            </div>
+
+            // Leave Room Button
+            <div class="border-t border-gray-200 dark:border-teal-700 pt-4">
+                <button
+                    on:click=handle_leave_room
+                    disabled=move || leave_room_action.pending().get()
+                    class="w-full px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 
+                    disabled:cursor-not-allowed text-white font-medium rounded-md 
+                    transition-colors flex items-center justify-center space-x-2"
+                >
+                    {move || {
+                        if leave_room_action.pending().get() {
+                            view! {
+                                <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                <span>"Leaving..."</span>
+                            }
+                                .into_any()
+                        } else {
+                            view! {
+                                <svg
+                                    class="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                                    />
+                                </svg>
+                                <span>"Leave Room"</span>
+                            }
+                                .into_any()
+                        }
+                    }}
+                </button>
+
+                // Show error if leave room fails
+                {move || {
+                    leave_room_action
+                        .value()
+                        .get()
+                        .and_then(|result| {
+                            if let Err(error) = result {
+                                Some(
+                                    view! {
+                                        <div class="mt-2 p-2 bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-md">
+                                            <p class="text-sm text-red-700 dark:text-red-300">
+                                                "Failed to leave room: "{error.to_string()}
+                                            </p>
+                                        </div>
+                                    }
+                                        .into_any(),
+                                )
+                            } else {
+                                None
+                            }
+                        })
+                }}
             </div>
 
             // Players list
@@ -283,7 +366,7 @@ fn PlayersPanel(room_data: RoomWithPlayersView) -> impl IntoView {
                     view! {
                         <div>
                             <h2 class="font-semibold text-gray-800 dark:text-gray-200 mb-3">
-                                "Current Game"
+                                "Current Session"
                             </h2>
                             <div class="space-y-2 text-sm">
                                 <div class="flex justify-between">
@@ -320,16 +403,6 @@ fn PlayersPanel(room_data: RoomWithPlayersView) -> impl IntoView {
                     }
                         .into_any()
                 })}
-
-            // Action buttons
-            <div class="space-y-2">
-                <button class="w-full px-4 py-2 text-sm bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors">
-                    "Share Room Code"
-                </button>
-                <button class="w-full px-4 py-2 text-sm bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors">
-                    "Leave Room"
-                </button>
-            </div>
         </div>
     }.into_any()
 }

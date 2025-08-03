@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use server_fn::codec::{GetUrl, PostUrl};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -13,9 +14,9 @@ pub struct RoomListItem {
 }
 
 #[server(
-    name = CreateDrawingRoom,
     prefix = "/api",
-    endpoint = "create_drawing_room"
+    endpoint = "create_drawing_room",
+    input = PostUrl
 )]
 pub async fn create_drawing_room(room_data: CreateRoomView) -> Result<CanvasRoomView, ServerFnError> {
     use diesel_async::RunQueryDsl;
@@ -89,9 +90,9 @@ pub async fn create_drawing_room(room_data: CreateRoomView) -> Result<CanvasRoom
 }
 
 #[server(
-    name =GetPublicRooms,
     prefix = "/api",
-    endpoint = "get_public_rooms"
+    endpoint = "get_public_rooms",
+    input = PostUrl, 
 )]
 pub async fn get_public_rooms() -> Result<Vec<RoomListItem>, ServerFnError> {
     use std::fmt;
@@ -153,7 +154,8 @@ pub async fn get_public_rooms() -> Result<Vec<RoomListItem>, ServerFnError> {
 #[server(
     name = JoinRoom,
     prefix = "/api",
-    endpoint = "join_room"
+    endpoint = "join_room",
+    input = PostUrl,
 )]
 pub async fn join_room(join_data: JoinRoomView) -> Result<RoomWithPlayersView, ServerFnError> {
     use std::fmt;
@@ -233,9 +235,9 @@ pub async fn join_room(join_data: JoinRoomView) -> Result<RoomWithPlayersView, S
 }
 
 #[server(
-    name = GetRoomDetails,
     prefix = "/api",
-    endpoint = "get_room_details"
+    endpoint = "get_room_details",
+    input = GetUrl
 )]
 pub async fn get_room_details(room_id: Uuid) -> Result<RoomWithPlayersView, ServerFnError> {
     use diesel::prelude::*;
@@ -290,9 +292,9 @@ pub async fn get_room_details(room_id: Uuid) -> Result<RoomWithPlayersView, Serv
 }
 
 #[server(
-    name = LeaveRoom,
     prefix = "/api",
-    endpoint = "leave_room"
+    endpoint = "leave_room",
+    input = PostUrl
 )]
 pub async fn leave_room(room_id: Uuid) -> Result<(), ServerFnError> {
     use std::fmt;

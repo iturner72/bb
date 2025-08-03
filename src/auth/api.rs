@@ -1,6 +1,12 @@
 use leptos::prelude::*;
+use server_fn::codec::PostUrl;
 
-#[server(AdminLoginFn, "/api")]
+#[server(
+    name = AdminLoginFn,
+    prefix = "/api",
+    endpoint = "admin_login",
+    input = PostUrl
+)]
 pub async fn admin_login(username: String, password: String) -> Result<(), ServerFnError> {
     use super::types::{AuthError, to_server_error};
 
@@ -50,7 +56,12 @@ pub async fn admin_login(username: String, password: String) -> Result<(), Serve
     Err(ServerFnError::ServerError("Server-side function called on client".to_string()))
 }
 
-#[server(LogoutFn, "/api")]
+#[server(
+    name = LogoutFn,
+    prefix = "/api",
+    endpoint = "logout",
+    input = PostUrl
+)]
 pub async fn logout() -> Result<(), ServerFnError> {
     #[cfg(feature = "ssr")]
     {
@@ -84,7 +95,12 @@ pub async fn logout() -> Result<(), ServerFnError> {
     Err(ServerFnError::ServerError("Server-side function called on client".to_string()))
 }
 
-#[server(VerifyTokenFn, "/api")]
+#[server(
+    name = VerifyTokenFn,
+    prefix = "/api",
+    endpoint = "verify_token",
+    input = PostUrl
+)]
 pub async fn verify_token() -> Result<bool, ServerFnError> {
     use super::types::{AuthError, to_server_error};
     

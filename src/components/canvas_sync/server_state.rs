@@ -5,6 +5,7 @@ cfg_if! {
         use std::collections::HashMap;
         use super::types::*;
         use leptos::prelude::*;
+        use server_fn::codec::{GetUrl, PostUrl};
 
         #[derive(Debug, Clone)]
         pub struct ServerCanvasState {
@@ -150,7 +151,11 @@ cfg_if! {
             }
         }
 
-        #[server(SaveCanvasToFile, "/api")]
+        #[server(
+            prefix = "/api",
+            endpoint = "save_canvas_to_file",
+            input = PostUrl
+        )]
         pub async fn save_canvas_to_file(room_id: String) -> Result<String, ServerFnError> {
             use crate::state::AppState;
 
@@ -166,7 +171,11 @@ cfg_if! {
             }
         }
 
-        #[server(LoadCanvasState, "/api")]
+        #[server(
+            prefix = "/api",
+            endpoint = "load_canvas_state",
+            input = GetUrl
+        )]
         pub async fn load_canvas_state(room_id: String) -> Result<CanvasState, ServerFnError> {
             use crate::state::AppState;
 

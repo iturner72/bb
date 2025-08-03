@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use server_fn::codec::GetUrl;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -16,7 +17,11 @@ pub struct CompanyLink {
     pub last_processed: Option<DateTime<Utc>>,
 }
 
-#[server(GetCompanyLinks, "/api")]
+#[server(
+    prefix = "/api",
+    endpoint = "get_company_links",
+    input = GetUrl
+)]
 pub async fn get_company_links() -> Result<Vec<CompanyLink>, ServerFnError> {
     use crate::supabase::get_client;
 
@@ -37,7 +42,11 @@ pub async fn get_company_links() -> Result<Vec<CompanyLink>, ServerFnError> {
         .map_err(|e| ServerFnError::ServerError(e.to_string()))
 }
 
-#[server(GetYearRange, "/api")]
+#[server(
+    prefix = "/api",
+    endpoint = "get_year_range",
+    input = GetUrl
+)]
 pub async fn get_year_range(company: Option<String>) -> Result<(i32, i32), ServerFnError> {
     use crate::supabase::get_client;
 
@@ -111,10 +120,10 @@ fn YearSelector(
             </label>
             <select
                 class="w-full p-2 rounded-md bg-gray-100 dark:bg-teal-800 
-                       text-gray-800 dark:text-gray-200 
-                       border border-teal-500 dark:border-seafoam-500
-                       focus:border-seafoam-600 dark:focus:border-aqua-400
-                       focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400"
+                text-gray-800 dark:text-gray-200 
+                border border-teal-500 dark:border-seafoam-500
+                focus:border-seafoam-600 dark:focus:border-aqua-400
+                focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400"
                 prop:value=move || value.get().map(|y| y.to_string()).unwrap_or_default()
                 on:change=move |ev| {
                     let value = event_target_value(&ev);
@@ -125,14 +134,15 @@ fn YearSelector(
                     }
                 }
             >
-                {allow_empty.then(|| view! {
-                    <option value="">"All Years"</option>
-                })}
-                {move || years().into_iter().map(|year| {
-                    view! {
-                        <option value={year.to_string()}>{year.to_string()}</option>
-                    }
-                }).collect_view()}
+                {allow_empty.then(|| view! { <option value="">"All Years"</option> })}
+                {move || {
+                    years()
+                        .into_iter()
+                        .map(|year| {
+                            view! { <option value=year.to_string()>{year.to_string()}</option> }
+                        })
+                        .collect_view()
+                }}
             </select>
         </div>
     }
@@ -315,10 +325,10 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
                     </label>
                     <select
                         class="w-full p-2 rounded-md bg-gray-100 dark:bg-teal-800 
-                               text-gray-800 dark:text-gray-200 
-                               border border-teal-500 dark:border-seafoam-500
-                               focus:border-seafoam-600 dark:focus:border-aqua-400
-                               focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400"
+                        text-gray-800 dark:text-gray-200 
+                        border border-teal-500 dark:border-seafoam-500
+                        focus:border-seafoam-600 dark:focus:border-aqua-400
+                        focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400"
                         on:change=move |ev| {
                             let value = event_target_value(&ev);
                             set_selected_company(if value.is_empty() { None } else { Some(value) });
@@ -327,20 +337,30 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
                         <option value="">"All Companies"</option>
                         <Suspense>
                             {move || {
-                                companies.get().map(|result| {
-                                    match result {
-                                        Ok(companies) => companies.into_iter().map(|company| {
-                                            view! {
-                                                <option value={company.clone()}>{company.clone()}</option>
-                                            }.into_any()
-                                        }).collect_view(),
-                                        Err(_) => vec![
-                                            view! { 
-                                                <option>"Error loading companies"</option> 
-                                            }.into_any()
-                                        ].collect_view(),
-                                    }
-                                })
+                                companies
+                                    .get()
+                                    .map(|result| {
+                                        match result {
+                                            Ok(companies) => {
+                                                companies
+                                                    .into_iter()
+                                                    .map(|company| {
+                                                        view! {
+                                                            <option value=company.clone()>{company.clone()}</option>
+                                                        }
+                                                            .into_any()
+                                                    })
+                                                    .collect_view()
+                                            }
+                                            Err(_) => {
+                                                vec![
+                                                    view! { <option>"Error loading companies"</option> }
+                                                        .into_any(),
+                                                ]
+                                                    .collect_view()
+                                            }
+                                        }
+                                    })
                             }}
                         </Suspense>
                     </select>
@@ -368,9 +388,11 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
 
                 <button
                     class="mt-6 px-4 py-2 h-10 bg-seafoam-500 dark:bg-seafoam-600 text-white rounded 
-                           hover:bg-seafoam-400 dark:hover:bg-seafoam-500 transition-colors
-                           disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-                    on:click=move |_| if is_processing.get() { cancel_refresh() } else { start_refresh() }
+                    hover:bg-seafoam-400 dark:hover:bg-seafoam-500 transition-colors
+                    disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
+                    on:click=move |_| {
+                        if is_processing.get() { cancel_refresh() } else { start_refresh() }
+                    }
                 >
                     {move || if is_processing() { "Cancel" } else { "Refresh Summaries" }}
                 </button>
@@ -381,66 +403,84 @@ pub fn SummaryRefreshProcessor() -> impl IntoView {
                 if !states.is_empty() {
                     view! {
                         <div class="grid gap-3 mt-6">
-                            {states.values().map(|update| {
-                                let is_completed = update.status == "completed";
-                                let status_class = if is_completed {
-                                    "bg-seafoam-100 dark:bg-seafoam-900 text-seafoam-800 dark:text-seafoam-200"
-                                } else {
-                                    "bg-aqua-100 dark:bg-aqua-900 text-aqua-800 dark:text-aqua-200"
-                                };
-                                let border_class = if is_completed {
-                                    "border-seafoam-500 dark:border-mint-400"
-                                } else {
-                                    "border-aqua-500 dark:border-aqua-400"
-                                };
-                                
-                                view! {
-                                    <div class=format!("p-4 rounded-lg border-l-4 bg-gray-100 dark:bg-teal-800 {}", border_class)>
-                                        <div class="flex justify-between items-center mb-2">
-                                            <span class="font-medium text-gray-800 dark:text-gray-200">
-                                                {update.company.clone()}
-                                            </span>
-                                            <span class=format!("px-2 py-1 text-sm rounded {}", status_class)>
-                                                {update.status.clone()}
-                                            </span>
-                                        </div>
-                                        
-                                        <div class="space-y-2 text-sm">
-                                            <div class="grid grid-cols-2 text-gray-600 dark:text-gray-300">
-                                                <span>"Processed"</span>
-                                                <span class="text-right">{update.new_posts}</span>
+                            {states
+                                .values()
+                                .map(|update| {
+                                    let is_completed = update.status == "completed";
+                                    let status_class = if is_completed {
+                                        "bg-seafoam-100 dark:bg-seafoam-900 text-seafoam-800 dark:text-seafoam-200"
+                                    } else {
+                                        "bg-aqua-100 dark:bg-aqua-900 text-aqua-800 dark:text-aqua-200"
+                                    };
+                                    let border_class = if is_completed {
+                                        "border-seafoam-500 dark:border-mint-400"
+                                    } else {
+                                        "border-aqua-500 dark:border-aqua-400"
+                                    };
+
+                                    view! {
+                                        <div class=format!(
+                                            "p-4 rounded-lg border-l-4 bg-gray-100 dark:bg-teal-800 {}",
+                                            border_class,
+                                        )>
+                                            <div class="flex justify-between items-center mb-2">
+                                                <span class="font-medium text-gray-800 dark:text-gray-200">
+                                                    {update.company.clone()}
+                                                </span>
+                                                <span class=format!(
+                                                    "px-2 py-1 text-sm rounded {}",
+                                                    status_class,
+                                                )>{update.status.clone()}</span>
                                             </div>
-                                            <div class="grid grid-cols-2 text-gray-600 dark:text-gray-300">
-                                                <span>"Failed"</span>
-                                                <span class="text-right">{update.skipped_posts}</span>
+
+                                            <div class="space-y-2 text-sm">
+                                                <div class="grid grid-cols-2 text-gray-600 dark:text-gray-300">
+                                                    <span>"Processed"</span>
+                                                    <span class="text-right">{update.new_posts}</span>
+                                                </div>
+                                                <div class="grid grid-cols-2 text-gray-600 dark:text-gray-300">
+                                                    <span>"Failed"</span>
+                                                    <span class="text-right">{update.skipped_posts}</span>
+                                                </div>
+                                                {update
+                                                    .current_post
+                                                    .as_ref()
+                                                    .map(|post| {
+                                                        let post = post.clone();
+                                                        view! {
+                                                            <div class="mt-2">
+                                                                <span class="text-gray-500 dark:text-gray-400">
+                                                                    "Current: "
+                                                                </span>
+                                                                <span class="text-gray-700 dark:text-gray-200 line-clamp-1">
+                                                                    {move || post.clone()}
+                                                                </span>
+                                                            </div>
+                                                        }
+                                                    })}
                                             </div>
-                                            {update.current_post.as_ref().map(|post| {
-                                                let post = post.clone();
-                                                view! {
-                                                    <div class="mt-2">
-                                                        <span class="text-gray-500 dark:text-gray-400">"Current: "</span>
-                                                        <span class="text-gray-700 dark:text-gray-200 line-clamp-1">
-                                                            {move || post.clone()}
-                                                        </span>
-                                                    </div>
-                                                }
-                                            })}
                                         </div>
-                                    </div>
-                                }
-                            }).collect_view()}
+                                    }
+                                })
+                                .collect_view()}
                         </div>
-                    }.into_any()
+                    }
+                        .into_any()
                 } else {
                     view! { <div></div> }.into_any()
                 }
             }}
 
-            {move || is_processing().then(|| view! {
-                <div class="mt-4 text-center text-sm text-seafoam-600 dark:text-seafoam-400">
-                    "Refreshing summaries..."
-                </div>
-            })}
+            {move || {
+                is_processing()
+                    .then(|| {
+                        view! {
+                            <div class="mt-4 text-center text-sm text-seafoam-600 dark:text-seafoam-400">
+                                "Refreshing summaries..."
+                            </div>
+                        }
+                    })
+            }}
         </div>
     }
 }
