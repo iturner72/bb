@@ -14,6 +14,7 @@ pub struct RoomListItem {
 }
 
 #[server(
+    name = CreateDrawingRoom,
     prefix = "/api",
     endpoint = "create_drawing_room",
     input = PostUrl

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::models::{CanvasRoomView, CreateRoomView, JoinRoomView};
 use super::drawing_rooms::*;
-use crate::components::drawing_rooms::create_drawing_room;
+use crate::components::drawing_rooms::CreateDrawingRoom;
 
 #[component]
 pub fn RoomBrowser() -> impl IntoView {
@@ -45,15 +45,6 @@ pub fn RoomBrowser() -> impl IntoView {
         });
     }
 
-    let quick_join = move |_: web_sys::MouseEvent| {
-        let code = join_code.get().trim().to_uppercase();
-        if !code.is_empty() {
-            let join_data = JoinRoomView { room_code: code };
-            join_room_action.dispatch(JoinRoom { join_data });
-            set_join_code(String::new());
-        }
-    };
-
     // Clone Arc for use in view closures
     let navigate_for_create = navigate_arc.clone();
     let navigate_for_rooms = navigate_arc.clone();
@@ -85,39 +76,34 @@ pub fn RoomBrowser() -> impl IntoView {
                 <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">
                     "Quick Join"
                 </h2>
-                <div class="flex space-x-3">
-                    <input
-                        type="text"
-                        placeholder="Enter room code (e.g., DRABCD12)"
-                        value=join_code
-                        on:input=move |ev| set_join_code(event_target_value(&ev))
-                        on:keydown=move |ev| {
-                            if ev.key() == "Enter" {
-                                let code = join_code.get().trim().to_uppercase();
-                                if !code.is_empty() {
-                                    let join_data = JoinRoomView { room_code: code };
-                                    join_room_action.dispatch(JoinRoom { join_data });
-                                    set_join_code(String::new());
-                                }
+
+                <ActionForm action=join_room_action>
+                    <div class="flex space-x-3">
+                        <input
+                            type="text"
+                            name="join_data[room_code]"
+                            placeholder="Enter room code (e.g., DRABCD12)"
+                            value=join_code
+                            on:input=move |ev| set_join_code(event_target_value(&ev))
+                            class="flex-1 px-3 py-2 border border-gray-300 dark:border-teal-600 rounded-md
+                            bg-white dark:bg-teal-700 text-gray-800 dark:text-gray-200
+                            focus:outline-none focus:ring-2 focus:ring-seafoam-500"
+                        />
+                        <button
+                            type="submit"
+                            disabled=move || {
+                                join_room_action.pending().get()
+                                    || join_code.get().trim().is_empty()
                             }
-                        }
-                        class="flex-1 px-3 py-2 border border-gray-300 dark:border-teal-600 rounded-md
-                        bg-white dark:bg-teal-700 text-gray-800 dark:text-gray-200
-                        focus:outline-none focus:ring-2 focus:ring-seafoam-500"
-                    />
-                    <button
-                        on:click=quick_join
-                        disabled=move || {
-                            join_room_action.pending().get() || join_code.get().trim().is_empty()
-                        }
-                        class="px-6 py-2 bg-mint-600 hover:bg-mint-700 text-white rounded-md
-                        disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                    >
-                        {move || {
-                            if join_room_action.pending().get() { "Joining..." } else { "Join" }
-                        }}
-                    </button>
-                </div>
+                            class="px-6 py-2 bg-mint-600 hover:bg-mint-700 text-white rounded-md
+                            disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                        >
+                            {move || {
+                                if join_room_action.pending().get() { "Joining..." } else { "Join" }
+                            }}
+                        </button>
+                    </div>
+                </ActionForm>
 
                 // Add error display for join action
                 {move || {
@@ -135,6 +121,7 @@ pub fn RoomBrowser() -> impl IntoView {
                                             </p>
                                         </div>
                                     }
+                                        .into_any()
                                 })
                         })
                 }}
@@ -210,6 +197,7 @@ pub fn RoomBrowser() -> impl IntoView {
                                                                     })
                                                                 />
                                                             }
+                                                                .into_any()
                                                         }
                                                     />
                                                 </div>
@@ -239,7 +227,7 @@ pub fn RoomBrowser() -> impl IntoView {
                 </Suspense>
             </div>
         </div>
-    }
+    }.into_any()
 }
 
 #[component]
@@ -252,10 +240,7 @@ fn CreateRoomForm(
     let (is_private, set_is_private) = signal(false);
     let (game_mode, set_game_mode) = signal("freeplay".to_string());
 
-    let create_room_action = Action::new(move |room_data: &CreateRoomView| {
-        let data = room_data.clone();
-        async move { create_drawing_room(data).await }
-    });
+    let create_room_action = ServerAction::<CreateDrawingRoom>::new();
 
     Effect::new(move |_| {
         if let Some(Ok(room)) = create_room_action.value().get() {
@@ -268,152 +253,157 @@ fn CreateRoomForm(
         }
     });
 
-    let submit_form = move |_| {
-        let name = room_name.get().trim().to_string();
-        if !name.is_empty() {
-            let room_data = CreateRoomView {
-                name,
-                max_players: Some(max_players.get()),
-                is_private: Some(is_private.get()),
-                game_mode: Some(game_mode.get()),
-                settings: None,
-            };
-            create_room_action.dispatch(room_data);
-        }
-    };
-
     view! {
         <div class="bg-white dark:bg-teal-800 p-6 rounded-lg shadow-md">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
                 "Create New Room"
             </h2>
 
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        "Room Name"
-                    </label>
-                    <input
-                        type="text"
-                        value=room_name
-                        on:input=move |ev| set_room_name(event_target_value(&ev))
-                        placeholder="Enter room name"
-                        class="w-full px-3 py-2 border border-gray-300 dark:border-teal-600 rounded-md
-                        bg-white dark:bg-teal-700 text-gray-800 dark:text-gray-200
-                        focus:outline-none focus:ring-2 focus:ring-seafoam-500"
-                    />
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
+            // Use ActionForm for proper HTTP POST requests
+            <ActionForm action=create_room_action>
+                <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            "Max Players"
+                            "Room Name"
                         </label>
-                        <select
-                            on:change=move |ev| {
-                                if let Ok(val) = event_target_value(&ev).parse::<i32>() {
-                                    set_max_players(val);
-                                }
-                            }
+                        <input
+                            type="text"
+                            name="room_data[name]"
+                            value=room_name
+                            on:input=move |ev| set_room_name(event_target_value(&ev))
+                            placeholder="Enter room name"
+                            required
                             class="w-full px-3 py-2 border border-gray-300 dark:border-teal-600 rounded-md
                             bg-white dark:bg-teal-700 text-gray-800 dark:text-gray-200
                             focus:outline-none focus:ring-2 focus:ring-seafoam-500"
-                        >
-                            <option value="4" selected=move || max_players.get() == 4>
-                                "4 players"
-                            </option>
-                            <option value="8" selected=move || max_players.get() == 8>
-                                "8 players"
-                            </option>
-                            <option value="12" selected=move || max_players.get() == 12>
-                                "12 players"
-                            </option>
-                            <option value="16" selected=move || max_players.get() == 16>
-                                "16 players"
-                            </option>
-                        </select>
+                        />
                     </div>
 
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            "Game Mode"
-                        </label>
-                        <select
-                            on:change=move |ev| set_game_mode(event_target_value(&ev))
-                            class="w-full px-3 py-2 border border-gray-300 dark:border-teal-600 rounded-md
-                            bg-white dark:bg-teal-700 text-gray-800 dark:text-gray-200
-                            focus:outline-none focus:ring-2 focus:ring-seafoam-500"
-                        >
-                            <option value="freeplay" selected=move || game_mode.get() == "freeplay">
-                                "Free Play"
-                            </option>
-                            <option
-                                value="guessing_game"
-                                selected=move || game_mode.get() == "guessing_game"
-                            >
-                                "Guessing Game"
-                            </option>
-                            <option value="teams" selected=move || game_mode.get() == "teams">
-                                "Team Battle"
-                            </option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="flex items-center">
-                    <input
-                        type="checkbox"
-                        id="private-room"
-                        checked=is_private
-                        on:change=move |ev| set_is_private(event_target_checked(&ev))
-                        class="h-4 w-4 text-seafoam-600 focus:ring-seafoam-500 border-gray-300 rounded"
-                    />
-                    <label for="private-room" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                        "Private room (invite only)"
-                    </label>
-                </div>
-
-                <div class="flex justify-end space-x-3">
-                    <button
-                        type="button"
-                        on:click=submit_form
-                        disabled=move || {
-                            create_room_action.pending().get() || room_name.get().trim().is_empty()
-                        }
-                        class="px-6 py-2 bg-seafoam-600 hover:bg-seafoam-700 text-white rounded-md
-                        disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                    >
-                        {move || {
-                            if create_room_action.pending().get() {
-                                "Creating..."
-                            } else {
-                                "Create Room"
-                            }
-                        }}
-                    </button>
-                </div>
-
-                {move || {
-                    create_room_action
-                        .value()
-                        .get()
-                        .and_then(|result| {
-                            result
-                                .err()
-                                .map(|e| {
-                                    view! {
-                                        <div class="mt-3 p-3 bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-md">
-                                            <p class="text-sm text-red-700 dark:text-red-300">
-                                                "Error: "{e.to_string()}
-                                            </p>
-                                        </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                "Max Players"
+                            </label>
+                            <select
+                                name="room_data[max_players]"
+                                on:change=move |ev| {
+                                    if let Ok(val) = event_target_value(&ev).parse::<i32>() {
+                                        set_max_players(val);
                                     }
-                                })
-                        })
-                }}
-            </div>
+                                }
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-teal-600 rounded-md
+                                bg-white dark:bg-teal-700 text-gray-800 dark:text-gray-200
+                                focus:outline-none focus:ring-2 focus:ring-seafoam-500"
+                            >
+                                <option value="4" selected=move || max_players.get() == 4>
+                                    "4 players"
+                                </option>
+                                <option value="8" selected=move || max_players.get() == 8>
+                                    "8 players"
+                                </option>
+                                <option value="12" selected=move || max_players.get() == 12>
+                                    "12 players"
+                                </option>
+                                <option value="16" selected=move || max_players.get() == 16>
+                                    "16 players"
+                                </option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                "Game Mode"
+                            </label>
+                            <select
+                                name="room_data[game_mode]"
+                                on:change=move |ev| set_game_mode(event_target_value(&ev))
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-teal-600 rounded-md
+                                bg-white dark:bg-teal-700 text-gray-800 dark:text-gray-200
+                                focus:outline-none focus:ring-2 focus:ring-seafoam-500"
+                            >
+                                <option
+                                    value="freeplay"
+                                    selected=move || game_mode.get() == "freeplay"
+                                >
+                                    "Free Play"
+                                </option>
+                                <option
+                                    value="guessing_game"
+                                    selected=move || game_mode.get() == "guessing_game"
+                                >
+                                    "Guessing Game"
+                                </option>
+                                <option value="teams" selected=move || game_mode.get() == "teams">
+                                    "Team Battle"
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center">
+                        <input
+                            type="checkbox"
+                            name="room_data[is_private]"
+                            id="private-room"
+                            checked=is_private
+                            on:change=move |ev| set_is_private(event_target_checked(&ev))
+                            class="h-4 w-4 text-seafoam-600 focus:ring-seafoam-500 border-gray-300 rounded"
+                        />
+                        <label
+                            for="private-room"
+                            class="ml-2 text-sm text-gray-700 dark:text-gray-300"
+                        >
+                            "Private room (invite only)"
+                        </label>
+                    </div>
+
+                    // Hidden field for settings (optional)
+                    <input type="hidden" name="room_data[settings]" value="" />
+
+                    <div class="flex justify-end space-x-3">
+                        <button
+                            type="submit"
+                            disabled=move || {
+                                create_room_action.pending().get()
+                                    || room_name.get().trim().is_empty()
+                            }
+                            class="px-6 py-2 bg-seafoam-600 hover:bg-seafoam-700 text-white rounded-md
+                            disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                        >
+                            {move || {
+                                if create_room_action.pending().get() {
+                                    "Creating..."
+                                } else {
+                                    "Create Room"
+                                }
+                            }}
+                        </button>
+                    </div>
+
+                    // Error display
+                    {move || {
+                        create_room_action
+                            .value()
+                            .get()
+                            .and_then(|result| {
+                                result
+                                    .err()
+                                    .map(|e| {
+                                        view! {
+                                            <div class="mt-3 p-3 bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-md">
+                                                <p class="text-sm text-red-700 dark:text-red-300">
+                                                    "Error: "{e.to_string()}
+                                                </p>
+                                            </div>
+                                        }
+                                            .into_any()
+                                    })
+                            })
+                    }}
+                </div>
+            </ActionForm>
         </div>
-    }
+    }.into_any()
 }
 
 #[component]
@@ -478,5 +468,5 @@ fn RoomCard(
                 {if can_join { "Join Room" } else { "Room Full" }}
             </button>
         </div>
-    }
+    }.into_any()
 }
