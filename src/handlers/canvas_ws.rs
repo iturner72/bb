@@ -115,7 +115,7 @@ async fn handle_canvas_socket(
         if let Some(canvas_state) = manager.get_room_state(room_id.clone()).await {
             let sync_message = CanvasMessage::StateSync(canvas_state);
             if let Ok(json) = serde_json::to_string(&sync_message) {
-                let _ = sender.send(Message::Text(json)).await;
+                let _ = sender.send(Message::Text(json.into())).await;
             }
         }
     }
@@ -137,7 +137,7 @@ async fn handle_canvas_socket(
 
                     if should_forward {
                         if let Ok(json) = serde_json::to_string(&canvas_msg) {
-                            if sender.send(Message::Text(json)).await.is_err() {
+                            if sender.send(Message::Text(json.into())).await.is_err() {
                                 break;
                             }
                         }

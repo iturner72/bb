@@ -28,14 +28,8 @@ pub fn RoomBrowser() -> impl IntoView {
         rooms.refetch();
     };
 
-    // Join room by code action
-    let join_room_action = Action::new(move |room_code: &String| {
-        let code = room_code.clone();
-        async move {
-            let join_data = JoinRoomView { room_code: code };
-            join_room(join_data).await
-        }
-    });
+    // Use ServerAction instead of Action for proper server function handling
+    let join_room_action = ServerAction::<JoinRoom>::new();
 
     // Clone the Arc for the Effect
     {
@@ -54,7 +48,8 @@ pub fn RoomBrowser() -> impl IntoView {
     let quick_join = move |_: web_sys::MouseEvent| {
         let code = join_code.get().trim().to_uppercase();
         if !code.is_empty() {
-            join_room_action.dispatch(code);
+            let join_data = JoinRoomView { room_code: code };
+            join_room_action.dispatch(JoinRoom { join_data });
             set_join_code(String::new());
         }
     };
@@ -100,7 +95,8 @@ pub fn RoomBrowser() -> impl IntoView {
                             if ev.key() == "Enter" {
                                 let code = join_code.get().trim().to_uppercase();
                                 if !code.is_empty() {
-                                    join_room_action.dispatch(code);
+                                    let join_data = JoinRoomView { room_code: code };
+                                    join_room_action.dispatch(JoinRoom { join_data });
                                     set_join_code(String::new());
                                 }
                             }
@@ -122,6 +118,26 @@ pub fn RoomBrowser() -> impl IntoView {
                         }}
                     </button>
                 </div>
+
+                // Add error display for join action
+                {move || {
+                    join_room_action
+                        .value()
+                        .get()
+                        .and_then(|result| {
+                            result
+                                .err()
+                                .map(|e| {
+                                    view! {
+                                        <div class="mt-3 p-3 bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-md">
+                                            <p class="text-sm text-red-700 dark:text-red-300">
+                                                "Failed to join room: "{e.to_string()}
+                                            </p>
+                                        </div>
+                                    }
+                                })
+                        })
+                }}
             </div>
 
             // Create room form - now uses Arc, thread-safe
@@ -167,9 +183,10 @@ pub fn RoomBrowser() -> impl IntoView {
                                     Ok(room_list) => {
                                         if room_list.is_empty() {
                                             view! {
-                                                <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                                                    <p>"No public rooms available."</p>
-                                                    <p class="text-sm mt-1">"Create one to get started!"</p>
+                                                <div class="text-center py-8">
+                                                    <p class="text-gray-500 dark:text-gray-400">
+                                                        "No public rooms available. Create one to get started!"
+                                                    </p>
                                                 </div>
                                             }
                                                 .into_any()
@@ -180,19 +197,19 @@ pub fn RoomBrowser() -> impl IntoView {
                                                         each=move || room_list.clone()
                                                         key=|room_item| room_item.room.id
                                                         children=move |room_item| {
-                                                            let nav_for_card = nav.clone();
+                                                            let _room_id = room_item.room.id;
+                                                            let nav_clone = nav.clone();
                                                             view! {
                                                                 <RoomCard
-                                                                    room_item=room_item.clone()
-                                                                    on_join=Callback::new(move |room_id| {
-                                                                        nav_for_card(
-                                                                            &format!("/room/{}", room_id),
+                                                                    room_item=room_item
+                                                                    on_join=Callback::new(move |_room_id: uuid::Uuid| {
+                                                                        nav_clone(
+                                                                            &format!("/room/{}", _room_id),
                                                                             Default::default(),
                                                                         );
                                                                     })
                                                                 />
                                                             }
-                                                                .into_any()
                                                         }
                                                     />
                                                 </div>
@@ -202,13 +219,15 @@ pub fn RoomBrowser() -> impl IntoView {
                                     }
                                     Err(e) => {
                                         view! {
-                                            <div class="text-center py-8 text-red-600 dark:text-red-400">
-                                                <p>"Failed to load rooms: "{e.to_string()}</p>
+                                            <div class="text-center py-8">
+                                                <p class="text-red-500">
+                                                    "Error loading rooms: "{e.to_string()}
+                                                </p>
                                                 <button
-                                                    on:click=move |_: web_sys::MouseEvent| refresh_rooms()
-                                                    class="mt-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md"
+                                                    on:click=move |_| refresh_rooms()
+                                                    class="mt-2 px-4 py-2 bg-seafoam-600 hover:bg-seafoam-700 text-white rounded-md"
                                                 >
-                                                    "Retry"
+                                                    "Try Again"
                                                 </button>
                                             </div>
                                         }
@@ -219,22 +238,8 @@ pub fn RoomBrowser() -> impl IntoView {
                     }}
                 </Suspense>
             </div>
-
-            // Current room indicator
-            {move || {
-                current_room
-                    .get()
-                    .map(|room_id| {
-                        view! {
-                            <div class="fixed bottom-4 right-4 bg-seafoam-600 text-white p-3 rounded-lg shadow-lg">
-                                <p class="text-sm font-medium">"Connected to room"</p>
-                                <p class="text-xs opacity-90">{room_id.to_string()}</p>
-                            </div>
-                        }
-                    })
-            }}
         </div>
-    }.into_any()
+    }
 }
 
 #[component]
