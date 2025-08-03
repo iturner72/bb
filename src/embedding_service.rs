@@ -5,7 +5,6 @@ use async_openai::{
     types::{CreateEmbeddingRequestArgs, EmbeddingInput},
     Client,
 };
-use leptos::prelude::*;
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
 use std::{collections::HashMap, convert::Infallible};

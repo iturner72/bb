@@ -5,53 +5,33 @@ use wasm_bindgen::JsCast;
 use super::canvas_sync::{
     client_state::ClientCanvasState,
     types::{CanvasMessage, Point},
+    websocket::CanvasWebSocketContext,
 };
 
 cfg_if! {
     if #[cfg(feature = "hydrate")] {
         use web_sys::{js_sys, CanvasRenderingContext2d};
-        use wasm_bindgen::closure::Closure;
     }
 }
 
 #[component]
-pub fn OTDrawingCanvas() -> impl IntoView {
-    let (connected, set_connected) = signal(false);
+pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
+    // Get WebSocket interface from context
+    let canvas_websocket = CanvasWebSocketContext::expect_context();
+
+    // Get message handler registration callback from context
+    let register_handler = expect_context::<Callback<Callback<CanvasMessage>>>();
+
+    // Canvas-specific state
     let (color, set_color) = signal(String::from("#000000"));
     let (brush_size, set_brush_size) = signal(5);
     let (is_drawing, set_is_drawing) = signal(false);
-    let (room_id, _set_room_id) = signal(String::from("default-room"));
     let (user_id, _set_user_id) = signal(generate_user_id());
     let (status_message, set_status_message) = signal(String::new());
 
     // OT-specific state
     let canvas_state = RwSignal::new(ClientCanvasState::new(user_id.get()));
     let canvas_ref = NodeRef::<leptos::html::Canvas>::new();
-
-    // WebSocket management
-    cfg_if! {
-        if #[cfg(feature = "hydrate")] {
-            use std::cell::RefCell;
-            thread_local! {
-                static WEBSOCKET: RefCell<Option<web_sys::WebSocket>> = const { RefCell::new(None) };
-            }
-        }
-    }
-
-    // send message to server
-    let send_message = move |message: CanvasMessage| {
-        cfg_if! {
-            if #[cfg(feature = "hydrate")] {
-                WEBSOCKET.with(|ws_cell| {
-                    if let Some(ws) = ws_cell.borrow().as_ref() {
-                        if let Ok(json) = serde_json::to_string(&message) {
-                            let _ = ws.send_with_str(&json);
-                        }
-                    }
-                });
-            }
-        }
-    };
 
     // redraw entire canvas from current state
     let redraw_canvas = move || {
@@ -94,6 +74,7 @@ pub fn OTDrawingCanvas() -> impl IntoView {
         }
     };
 
+    // Canvas message handler
     let handle_canvas_message = move |message: CanvasMessage| {
         match message {
             CanvasMessage::StateSync(state) => {
@@ -117,7 +98,7 @@ pub fn OTDrawingCanvas() -> impl IntoView {
                     log::info!(
                         "Applied remote operation: {:?}",
                         transformed_op.operation_type
-                    )
+                    );
                 });
                 redraw_canvas();
             }
@@ -150,71 +131,11 @@ pub fn OTDrawingCanvas() -> impl IntoView {
         }
     };
 
-    // initialize WebSocket with OT message handling
-    let setup_websocket = move || {
-        cfg_if! {
-            if #[cfg(feature = "hydrate")] {
-                let protocol = if web_sys::window().unwrap().location().protocol().unwrap() == "https:" {
-                    "wss"
-                } else {
-                    "ws"
-                };
+    // Register our message handler with the room page
+    let handler_callback = Callback::new(handle_canvas_message);
+    register_handler.run(handler_callback);
 
-                let ws_url = format!(
-                    "{}://{}/ws/canvas/{}",
-                    protocol,
-                    web_sys::window().unwrap().location().host().unwrap(),
-                    room_id.get()
-                );
-
-                match web_sys::WebSocket::new(&ws_url) {
-                    Ok(ws) => {
-                        let open_closure = Closure::wrap(Box::new(move || {
-                            set_connected.set(true);
-                            set_status_message.set("Connected".to_string());
-
-                            // request initial state
-                            send_message(CanvasMessage::RequestState);
-                        }) as Box<dyn FnMut()>);
-
-                        let close_closure = Closure::wrap(Box::new(move || {
-                            set_connected.set(false);
-                            set_status_message.set("Disconnected".to_string());
-                        }) as Box<dyn FnMut()>);
-
-                        let message_closure = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
-                            if let Some(text) = e.data().as_string() {
-                                match serde_json::from_str::<CanvasMessage>(&text) {
-                                    Ok(message) => handle_canvas_message(message),
-                                    Err(e) => {
-                                        log::error!("Failed to parse message: {}", e);
-                                    }
-                                }
-                            }
-                        }) as Box<dyn FnMut(web_sys::MessageEvent)>);
-
-                        ws.set_onopen(Some(open_closure.as_ref().unchecked_ref()));
-                        ws.set_onclose(Some(close_closure.as_ref().unchecked_ref()));
-                        ws.set_onmessage(Some(message_closure.as_ref().unchecked_ref()));
-
-                        open_closure.forget();
-                        close_closure.forget();
-                        message_closure.forget();
-
-                        WEBSOCKET.with(|ws_cell| {
-                            *ws_cell.borrow_mut() = Some(ws);
-                        });
-                    },
-                    Err(err) => {
-                        log::error!("Failed to connect to WebSocket: {:?}", err);
-                        set_status_message.set("Connection failed".to_string());
-                    }
-                }
-            }
-        }
-    };
-
-    let draw_line_segment = move |x: f64, y: f64| {
+    let draw_line_segment = move |_x: f64, _y: f64| {
         cfg_if! {
             if #[cfg(feature = "hydrate")] {
                 if let Some(canvas) = canvas_ref.get() {
@@ -226,7 +147,7 @@ pub fn OTDrawingCanvas() -> impl IntoView {
                             if let Some(last_point) = current_stroke.points.last() {
                                 context.begin_path();
                                 context.move_to(last_point.x, last_point.y);
-                                context.line_to(x, y);
+                                context.line_to(_x, _y);
                                 context.set_line_cap("round");
                                 context.set_line_width(current_stroke.brush_size as f64);
                                 context.set_stroke_style_str(&current_stroke.color);
@@ -264,7 +185,7 @@ pub fn OTDrawingCanvas() -> impl IntoView {
                 client_state.add_to_stroke(point);
             });
 
-            // draw line immediately for responsivness
+            // draw line immediately for responsiveness
             draw_line_segment(x, y);
         }
     };
@@ -275,7 +196,7 @@ pub fn OTDrawingCanvas() -> impl IntoView {
 
             canvas_state.update(|client_state| {
                 if let Some(operation) = client_state.finish_stroke() {
-                    send_message(CanvasMessage::SubmitOperation(operation));
+                    canvas_websocket.send(CanvasMessage::SubmitOperation(operation));
                 }
             });
         }
@@ -290,58 +211,67 @@ pub fn OTDrawingCanvas() -> impl IntoView {
                 undoable_ops.last().map(|op| op.id.clone())
             };
 
-            // now we can create the undo operation with a mutable borrow
             if let Some(op_id) = last_op_id {
                 let undo_operation = client_state.create_undo(op_id);
-                send_message(CanvasMessage::SubmitOperation(undo_operation));
+                canvas_websocket.send(CanvasMessage::SubmitOperation(undo_operation));
             }
         });
     };
 
+    // save canvas as SVG
+    let save_canvas = move |_: web_sys::MouseEvent| {
+        canvas_websocket.send(CanvasMessage::SaveCanvas);
+    };
+
+    // clear entire canvas
     let clear_canvas = move |_: web_sys::MouseEvent| {
         canvas_state.update(|client_state| {
             let clear_operation = client_state.create_clear();
-            send_message(CanvasMessage::SubmitOperation(clear_operation));
+            canvas_websocket.send(CanvasMessage::SubmitOperation(clear_operation));
         });
     };
 
-    let save_canvas = move |_: web_sys::MouseEvent| {
-        send_message(CanvasMessage::SaveCanvas);
-    };
-
-    // mouse event handlers
+    // Mouse event handlers
     let on_mouse_down = move |e: web_sys::MouseEvent| {
-        start_drawing(e.offset_x() as f64, e.offset_y() as f64);
+        if let Some(canvas) = canvas_ref.get() {
+            let rect = canvas.get_bounding_client_rect();
+            let x = e.client_x() as f64 - rect.left();
+            let y = e.client_y() as f64 - rect.top();
+            start_drawing(x, y);
+        }
     };
 
     let on_mouse_move = move |e: web_sys::MouseEvent| {
-        continue_drawing(e.offset_x() as f64, e.offset_y() as f64);
+        if let Some(canvas) = canvas_ref.get() {
+            let rect = canvas.get_bounding_client_rect();
+            let x = e.client_x() as f64 - rect.left();
+            let y = e.client_y() as f64 - rect.top();
+            continue_drawing(x, y);
+        }
     };
 
-    let on_mouse_up = move |_| {
+    let on_mouse_up = move |_: web_sys::MouseEvent| {
         finish_drawing();
     };
 
-    // touch event handlers
+    // Touch event handlers
     let on_touch_start = move |e: web_sys::TouchEvent| {
         e.prevent_default();
-        let touches = e.touches();
-        if touches.length() > 0 {
-            cfg_if! {
-                if #[cfg(feature = "hydrate")] {
-                    if let Some(touch) = js_sys::try_iter(&touches)
-                        .unwrap()
-                        .unwrap()
-                        .next()
-                        .and_then(Result::ok)
-                    {
-                        let touch: web_sys::Touch = touch.dyn_into().unwrap();
-                        if let Some(canvas) = canvas_ref.get() {
-                            let rect = canvas.get_bounding_client_rect();
-                            let x = touch.client_x() as f64 - rect.left();
-                            let y = touch.client_y() as f64 - rect.top();
-                            start_drawing(x, y);
-                        }
+        cfg_if! {
+            if #[cfg(feature = "hydrate")] {
+                let touches = e.touches();
+                if let Some(touch) = js_sys::try_iter(&touches)
+                    .unwrap()
+                    .unwrap()
+                    .next()
+                    .and_then(Result::ok)
+                {
+                    let touch: web_sys::Touch = touch.dyn_into().unwrap();
+                    if let Some(canvas) = canvas_ref.get() {
+                        let rect = canvas.get_bounding_client_rect();
+                        let x = touch.client_x() as f64 - rect.left();
+                        let y = touch.client_y() as f64 - rect.top();
+                        start_drawing(x, y);
                     }
                 }
             }
@@ -350,25 +280,21 @@ pub fn OTDrawingCanvas() -> impl IntoView {
 
     let on_touch_move = move |e: web_sys::TouchEvent| {
         e.prevent_default();
-        if is_drawing.get() {
-            let touches = e.touches();
-            if touches.length() > 0 {
-                cfg_if! {
-                    if #[cfg(feature = "hydrate")] {
-                        if let Some(touch) = js_sys::try_iter(&touches)
-                            .unwrap()
-                            .unwrap()
-                            .next()
-                            .and_then(Result::ok)
-                        {
-                            let touch: web_sys::Touch = touch.dyn_into().unwrap();
-                            if let Some(canvas) = canvas_ref.get() {
-                                let rect = canvas.get_bounding_client_rect();
-                                let x = touch.client_x() as f64 - rect.left();
-                                let y = touch.client_y() as f64 - rect.top();
-                                continue_drawing(x, y);
-                            }
-                        }
+        cfg_if! {
+            if #[cfg(feature = "hydrate")] {
+                let touches = e.touches();
+                if let Some(touch) = js_sys::try_iter(&touches)
+                    .unwrap()
+                    .unwrap()
+                    .next()
+                    .and_then(Result::ok)
+                {
+                    let touch: web_sys::Touch = touch.dyn_into().unwrap();
+                    if let Some(canvas) = canvas_ref.get() {
+                        let rect = canvas.get_bounding_client_rect();
+                        let x = touch.client_x() as f64 - rect.left();
+                        let y = touch.client_y() as f64 - rect.top();
+                        continue_drawing(x, y);
                     }
                 }
             }
@@ -380,8 +306,8 @@ pub fn OTDrawingCanvas() -> impl IntoView {
         finish_drawing();
     };
 
-    // keyboard shortcurs
-    let handle_keydown = move |ev: web_sys::KeyboardEvent| {
+    // keyboard shortcuts
+    let _handle_keydown = move |ev: web_sys::KeyboardEvent| {
         if ev.ctrl_key() || ev.meta_key() {
             match ev.key().as_str() {
                 "z" => {
@@ -397,30 +323,19 @@ pub fn OTDrawingCanvas() -> impl IntoView {
         }
     };
 
-    // initialize WebSocket and keyboard listener
+    // Setup keyboard listener
     let _ = RenderEffect::new(move |_| {
-        setup_websocket();
-
         cfg_if! {
             if #[cfg(feature = "hydrate")] {
                 let window = web_sys::window().unwrap();
-                let closure = Closure::wrap(Box::new(handle_keydown) as Box<dyn FnMut(_)>);
+                let closure = wasm_bindgen::closure::Closure::wrap(Box::new(_handle_keydown) as Box<dyn FnMut(_)>);
                 window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref()).unwrap();
                 closure.forget();
             }
         }
 
         || {
-            // cleanup
-            cfg_if! {
-                if #[cfg(feature = "hydrate")] {
-                    WEBSOCKET.with(|ws_cell| {
-                        if let Some(ws) = ws_cell.borrow_mut().take() {
-                            ws.close().unwrap_or_default();
-                        }
-                    });
-                }
-            }
+            // cleanup - keyboard listener will be cleaned up automatically
         }
     });
 
@@ -437,118 +352,164 @@ pub fn OTDrawingCanvas() -> impl IntoView {
     }
 
     view! {
-        <div class="flex flex-col items-center space-y-4">
-            <h2 class="text-2xl font-bold">"Operational Transform Canvas"</h2>
+        <div class="w-full h-full flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            // Enhanced status bar with pending operations and undo status
+            <div class="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 px-4 py-2">
+                <div class="flex items-center justify-between text-sm">
+                    <div class="flex items-center space-x-4">
+                        // Connection status
+                        <div class=move || {
+                            format!(
+                                "px-2 py-1 rounded {}",
+                                if canvas_websocket.is_connected() {
+                                    "bg-green-500 text-white"
+                                } else {
+                                    "bg-red-500 text-white"
+                                },
+                            )
+                        }>
+                            {move || {
+                                if canvas_websocket.is_connected() {
+                                    "Connected"
+                                } else {
+                                    "Disconnected"
+                                }
+                            }}
+                        </div>
 
-            // status bar
-            <div class="flex items-center space-x-4 text-sm">
-                <div class=format!(
-                    "px-2 py-1 rounded {}",
-                    if connected.get() {
-                        "bg-mint-500 text-gray-300"
-                    } else {
-                        "bg-salmon-400 text-wenge-500"
-                    },
-                )>{move || if connected.get() { "Connected" } else { "Disconnected" }}</div>
-                <div class="text-gray-600">{status_message}</div>
-                <div class="text-gray-500">
-                    {move || {
-                        canvas_state
-                            .with(|client_state| {
-                                format!(
-                                    "Pending: {} | Can undo: {}",
-                                    client_state.get_pending_operations().len(),
-                                    if client_state.can_undo() { "Yes" } else { "No" },
-                                )
-                            })
-                    }}
+                        // Status message
+                        <div class="text-gray-600 dark:text-gray-400">{status_message}</div>
+
+                        // Pending operations and undo status
+                        <div class="text-gray-500 dark:text-gray-400">
+                            {move || {
+                                canvas_state
+                                    .with(|client_state| {
+                                        format!(
+                                            "Pending: {} | Can undo: {}",
+                                            client_state.get_pending_operations().len(),
+                                            if client_state.can_undo() { "Yes" } else { "No" },
+                                        )
+                                    })
+                            }}
+                        </div>
+                    </div>
+
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                        "Room: " {room_id} " • User: " {user_id}
+                    </div>
                 </div>
             </div>
 
-            // controls
-            <div class="flex items-center space-x-4 flex-wrap">
-                <div class="flex items-center">
-                    <label for="color-picker" class="mr-2">
-                        "Color:"
-                    </label>
-                    <input
-                        id="color-picker"
-                        type="color"
-                        value=color
-                        on:change=move |e| set_color.set(event_target_value(&e))
-                        class="h-8 w-12"
-                    />
+            // Enhanced toolbar with better styling
+            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                <div class="flex items-center space-x-4">
+                    // Color picker
+                    <div class="flex items-center space-x-2">
+                        <label
+                            for="color-picker"
+                            class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                        >
+                            "Color:"
+                        </label>
+                        <input
+                            id="color-picker"
+                            type="color"
+                            prop:value=color
+                            on:input=move |e| {
+                                let value = event_target_value(&e);
+                                set_color.set(value);
+                            }
+                            class="w-10 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
+                        />
+                    </div>
+
+                    // Brush size slider with better styling
+                    <div class="flex items-center space-x-2">
+                        <label
+                            for="brush-size"
+                            class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                        >
+                            "Brush:"
+                        </label>
+                        <input
+                            id="brush-size"
+                            type="range"
+                            min="1"
+                            max="30"
+                            prop:value=brush_size
+                            on:input=move |e| {
+                                let value = event_target_value(&e).parse().unwrap_or(5);
+                                set_brush_size.set(value);
+                            }
+                            class="w-24"
+                        />
+                        <span class="text-sm text-gray-600 dark:text-gray-400 w-8">
+                            {brush_size}
+                        </span>
+                    </div>
                 </div>
 
-                <div class="flex items-center">
-                    <label for="brush-size" class="mr-2">
-                        "Brush:"
-                    </label>
-                    <input
-                        id="brush-size"
-                        type="range"
-                        min="1"
-                        max="30"
-                        value=brush_size
-                        on:input=move |e| {
-                            set_brush_size(event_target_value(&e).parse::<u32>().unwrap_or(5));
-                        }
-                        class="w-24"
-                    />
-                    <span class="ml-1 w-8">{brush_size}</span>
-                </div>
-
-                <div class="flex space-x-2">
+                // Action buttons with enhanced styling and disabled states
+                <div class="flex items-center space-x-2">
                     <button
                         on:click=undo
-                        class="bg-teal-500 hover:bg-teal-600 text-gray-200 px-3 py-1 rounded text-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1 rounded text-sm disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                         disabled=move || {
                             canvas_state.with(|canvas_state| { !canvas_state.can_undo() })
                         }
+                        title="Undo last action (Ctrl+Z)"
                     >
                         "Undo (Ctrl+Z)"
                     </button>
 
                     <button
                         on:click=save_canvas
-                        class="bg-mint-400 hover:bg-mint-600 text-gray-700 px-3 py-1 rounded text-sm"
+                        class="bg-mint-400 hover:bg-mint-600 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
+                        title="Save canvas as SVG (Ctrl+S)"
                     >
                         "Save (Ctrl+S)"
                     </button>
 
                     <button
                         on:click=clear_canvas
-                        class="bg-salmon-500 hover:bg-salmon-600 text-gray-200 px-3 py-1 rounded text-sm"
+                        class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors"
+                        title="Clear entire canvas"
                     >
                         "Clear"
                     </button>
                 </div>
             </div>
 
-            // canvas
-            <div class="border-2 border-gray-300 rounded shadow-lg">
-                <canvas
-                    node_ref=canvas_ref
-                    width="800"
-                    height="600"
-                    on:mousedown=on_mouse_down
-                    on:mousemove=on_mouse_move
-                    on:mouseup=on_mouse_up
-                    on:mouseout=move |_| finish_drawing()
-                    on:touchstart=on_touch_start
-                    on:touchmove=on_touch_move
-                    on:touchend=on_touch_end
-                    on:touchcancel=move |e: web_sys::TouchEvent| {
-                        e.prevent_default();
-                        finish_drawing();
-                    }
-                    class="bg-gray-100 touch-none cursor-crosshair"
-                ></canvas>
+            // Canvas area with enhanced border and shadow
+            <div class="flex-1 flex items-center justify-center p-4">
+                <div class="border-2 border-gray-300 dark:border-gray-600 rounded-lg shadow-lg overflow-hidden">
+                    <canvas
+                        node_ref=canvas_ref
+                        width="800"
+                        height="600"
+                        class="bg-gray-100 dark:bg-white cursor-crosshair touch-none"
+                        on:mousedown=on_mouse_down
+                        on:mousemove=on_mouse_move
+                        on:mouseup=on_mouse_up
+                        on:mouseout=move |_| finish_drawing()
+                        on:touchstart=on_touch_start
+                        on:touchmove=on_touch_move
+                        on:touchend=on_touch_end
+                        on:touchcancel=move |e: web_sys::TouchEvent| {
+                            e.prevent_default();
+                            finish_drawing();
+                        }
+                    ></canvas>
+                </div>
             </div>
 
-            <div class="text-cs text-gray-700 text-center max-w-lg">
-                "Operational Transform ensures consistency across all connected clients. "
-                "Draw collabortively with automatic conflict resolution!"
+            // Enhanced footer with operational transform info
+            <div class="p-3 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+                <div class="text-center text-xs text-gray-600 dark:text-gray-400 max-w-lg mx-auto">
+                    "Operational Transform ensures consistency across all connected clients. "
+                    "Draw collaboratively with automatic conflict resolution!"
+                </div>
             </div>
         </div>
     }

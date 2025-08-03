@@ -46,7 +46,7 @@ impl Theme {
     }
 }
 
-fn get_stored_theme() -> Theme {
+fn _get_stored_theme() -> Theme {
     cfg_if! {
         if #[cfg(feature = "hydrate")] {
             use web_sys::window;
@@ -64,26 +64,26 @@ fn get_stored_theme() -> Theme {
     }
 }
 
-fn set_stored_theme(theme: &Theme) {
+fn _set_stored_theme(_theme: &Theme) {
     cfg_if! {
         if #[cfg(feature = "hydrate")] {
             use web_sys::window;
             if let Some(storage) = window()
                 .and_then(|w| w.local_storage().ok().flatten())
             {
-                let _ = storage.set_item("selected_theme", theme.as_str());
+                let _ = storage.set_item("selected_theme", _theme.as_str());
             }
         }
     }
 }
 
-fn apply_theme_to_document(theme: &Theme) {
+fn _apply_theme_to_document(_theme: &Theme) {
     cfg_if! {
         if #[cfg(feature = "hydrate")] {
             use web_sys::window;
             if let Some(document) = window().and_then(|w| w.document()) {
                 if let Some(html_element) = document.document_element() {
-                    match theme {
+                    match _theme {
                         Theme::Neon => { let _ = html_element.remove_attribute("data-theme"); }
                         Theme::Royal => { let _ = html_element.set_attribute("data-theme", "royal"); }
                         Theme::Earth => { let _ = html_element.set_attribute("data-theme", "earth"); }
@@ -104,13 +104,13 @@ pub fn ThemeSelector() -> impl IntoView {
     cfg_if! {
         if #[cfg(feature = "hydrate")] {
             Effect::new(move |_| {
-                set_current_theme(get_stored_theme());
+                set_current_theme(_get_stored_theme());
             });
 
             Effect::new(move |_| {
                 let theme = current_theme.get();
-                apply_theme_to_document(&theme);
-                set_stored_theme(&theme);
+                _apply_theme_to_document(&theme);
+                _set_stored_theme(&theme);
             });
         }
     }

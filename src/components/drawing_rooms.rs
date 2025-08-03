@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::models::{
-    CanvasRoomView, CreateRoomView, GameSessionView, JoinRoomView, RoomPlayerView, RoomWithPlayersView
+    CanvasRoomView, CreateRoomView, JoinRoomView, RoomWithPlayersView
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -31,6 +31,7 @@ pub async fn create_drawing_room(room_data: CreateRoomView) -> Result<CanvasRoom
     enum RoomError {
         Pool(String),
         Database(diesel::result::Error),
+        #[allow(dead_code)]
         Unauthorized,
     }
 
@@ -161,7 +162,7 @@ pub async fn get_public_rooms() -> Result<Vec<RoomListItem>, ServerFnError> {
 pub async fn join_room(join_data: JoinRoomView) -> Result<RoomWithPlayersView, ServerFnError> {
     use std::fmt;
     use crate::state::AppState;
-    use crate::models::{CanvasRoom, RoomWithPlayersView};
+    use crate::models::CanvasRoom;
 
     #[derive(Debug)]
     enum JoinError {
@@ -170,6 +171,7 @@ pub async fn join_room(join_data: JoinRoomView) -> Result<RoomWithPlayersView, S
         RoomNotFound,
         RoomFull,
         AlreadyInRoom,
+        #[allow(dead_code)]
         Unauthorized,
     }
 
@@ -246,7 +248,7 @@ pub async fn get_room_details(room_id: Uuid) -> Result<RoomWithPlayersView, Serv
     use std::fmt;
     use crate::state::AppState;
     use crate::schema::canvas_rooms;
-    use crate::models::{CanvasRoom, RoomWithPlayersView};
+    use crate::models::CanvasRoom;
 
     #[derive(Debug)]
     enum RoomError {
@@ -306,6 +308,7 @@ pub async fn leave_room(room_id: Uuid) -> Result<(), ServerFnError> {
     enum LeaveError {
         Pool(String),
         Database(diesel::result::Error),
+        #[allow(dead_code)]
         Unauthorized,
     }
 

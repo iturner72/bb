@@ -79,17 +79,10 @@ fn HomePage() -> impl IntoView {
 
             <div class="container mx-auto p-4 flex justify-center">
                 <a
-
-                    href="/draw"
-                    class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded transition-colors"
-                >
-                    "Try Collaborative Drawing"
-                </a>
-                <a
                     href="/rooms"
                     class="bg-seafoam-500 hover:bg-seafoam-600 text-white font-bold py-2 px-4 rounded transition-colors"
                 >
-                    "Drawing Rooms"
+                    "drawing rooms"
                 </a>
             </div>
             <Poasts />

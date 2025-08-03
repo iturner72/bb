@@ -42,8 +42,8 @@ pub mod rag {
     }
 
     pub struct RagService {
-        client: Client<OpenAIConfig>,
-        model: String,
+        _client: Client<OpenAIConfig>,
+        _model: String,
     }
 
     impl Default for RagService {
@@ -54,10 +54,10 @@ pub mod rag {
 
     impl RagService {
         pub fn new() -> Self {
-            let client = Client::new();
+            let _client = Client::new();
             Self {
-                client,
-                model: "gpt-3.5-turbo".to_string(),
+                _client,
+                _model: "gpt-3.5-turbo".to_string(),
             }
         }
 

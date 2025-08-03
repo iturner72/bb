@@ -5,8 +5,18 @@ use uuid::Uuid;
 use crate::components::{
     canvas::OTDrawingCanvas,
     drawing_rooms::{get_room_details, leave_room},
+    canvas_sync::{
+        types::CanvasMessage,
+        websocket::{CanvasWebSocket, CanvasWebSocketContext},
+    },
 };
 use crate::models::RoomWithPlayersView;
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "hydrate")] {
+        use wasm_bindgen::{closure::Closure, JsCast};
+    }
+}
 
 #[component]
 pub fn DrawingRoomPage(
@@ -15,6 +25,128 @@ pub fn DrawingRoomPage(
     let (current_room_data, set_current_room_data) = signal(None::<RoomWithPlayersView>);
     let (show_players_panel, set_show_players_panel) = signal(true);
     let (connection_status, set_connection_status) = signal("Connecting...".to_string());
+    let (connected, set_connected) = signal(false);
+
+    // WebSocket state - managed at room level using thread-local storage
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "hydrate")] {
+            use std::cell::RefCell;
+            thread_local! {
+                static ROOM_WEBSOCKET: RefCell<Option<web_sys::WebSocket>> = const { RefCell::new(None) };
+            }
+        }
+    }
+
+    // Message handler callback - will be passed to canvas
+    let (message_handler, set_message_handler) = signal(None::<Callback<CanvasMessage>>);
+
+    // WebSocket send function
+    let send_message = Callback::new(move |_message: CanvasMessage| {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "hydrate")] {
+                ROOM_WEBSOCKET.with(|ws_cell| {
+                    if let Some(ws) = ws_cell.borrow().as_ref() {
+                        if let Ok(json) = serde_json::to_string(&_message) {
+                            let _ = ws.send_with_str(&json);
+                        }
+                    }
+                });
+            }
+        }
+    });
+
+    // Create WebSocket interface
+    let canvas_websocket = CanvasWebSocket::new(
+        connected,
+        send_message,
+        connection_status,
+    );
+
+    // Setup WebSocket when room_id changes
+    let setup_websocket = move |_room_uuid: Uuid| {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "hydrate")] {
+                // Close existing connection if any
+                ROOM_WEBSOCKET.with(|ws_cell| {
+                    if let Some(existing_ws) = ws_cell.borrow_mut().take() {
+                        let _ = existing_ws.close();
+                    }
+                });
+
+                let protocol = if web_sys::window().unwrap().location().protocol().unwrap() == "https:" {
+                    "wss"
+                } else {
+                    "ws"
+                };
+
+                let ws_url = format!(
+                    "{}://{}/ws/canvas/{}",
+                    protocol,
+                    web_sys::window().unwrap().location().host().unwrap(),
+                    _room_uuid
+                );
+
+                match web_sys::WebSocket::new(&ws_url) {
+                    Ok(ws) => {
+                        // Connection opened
+                        let set_connected_clone = set_connected;
+                        let set_status_clone = set_connection_status;
+                        let send_message_clone = send_message;
+                        let open_closure = Closure::wrap(Box::new(move || {
+                            set_connected_clone.set(true);
+                            set_status_clone.set("Connected".to_string());
+                            // Request initial state
+                            send_message_clone.run(CanvasMessage::RequestState);
+                        }) as Box<dyn FnMut()>);
+
+                        // Connection closed
+                        let set_connected_clone = set_connected;
+                        let set_status_clone = set_connection_status;
+                        let close_closure = Closure::wrap(Box::new(move || {
+                            set_connected_clone.set(false);
+                            set_status_clone.set("Disconnected".to_string());
+                        }) as Box<dyn FnMut()>);
+
+                        // Message received
+                        let message_handler_signal = message_handler;
+                        let message_closure = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
+                            if let Some(text) = e.data().as_string() {
+                                match serde_json::from_str::<CanvasMessage>(&text) {
+                                    Ok(message) => {
+                                        // Forward to canvas component if handler is set
+                                        if let Some(handler) = message_handler_signal.get() {
+                                            handler.run(message);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to parse WebSocket message: {}", e);
+                                    }
+                                }
+                            }
+                        }) as Box<dyn FnMut(web_sys::MessageEvent)>);
+
+                        ws.set_onopen(Some(open_closure.as_ref().unchecked_ref()));
+                        ws.set_onclose(Some(close_closure.as_ref().unchecked_ref()));
+                        ws.set_onmessage(Some(message_closure.as_ref().unchecked_ref()));
+
+                        // Keep closures alive
+                        open_closure.forget();
+                        close_closure.forget();
+                        message_closure.forget();
+
+                        // Store WebSocket in thread-local storage
+                        ROOM_WEBSOCKET.with(|ws_cell| {
+                            *ws_cell.borrow_mut() = Some(ws);
+                        });
+                    }
+                    Err(err) => {
+                        log::error!("Failed to connect to WebSocket: {:?}", err);
+                        set_connection_status.set("Connection failed".to_string());
+                    }
+                }
+            }
+        }
+    };
 
     // Load room details when room_id changes
     let room_details = Resource::new(
@@ -27,11 +159,47 @@ pub fn DrawingRoomPage(
         },
     );
 
-    // Update current room data when resource changes
+    // Update current room data and setup WebSocket when resource changes
     Effect::new(move |_| {
         if let Some(Some(room_data)) = room_details.get() {
-            set_current_room_data(Some(room_data));
-            set_connection_status("Connected".to_string());
+            set_current_room_data(Some(room_data.clone()));
+            
+            // Setup WebSocket for this room
+            if let Some(room_uuid) = room_id.get() {
+                setup_websocket(room_uuid);
+            }
+        }
+    });
+
+    // Cleanup WebSocket on component unmount
+    let cleanup_websocket = move || {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "hydrate")] {
+                ROOM_WEBSOCKET.with(|ws_cell| {
+                    if let Some(ws) = ws_cell.borrow_mut().take() {
+                        let _ = ws.close();
+                    }
+                });
+            }
+        }
+    };
+
+    // Register message handler from canvas
+    let register_message_handler = Callback::new(move |handler: Callback<CanvasMessage>| {
+        set_message_handler.set(Some(handler));
+    });
+
+    // Provide WebSocket context to child components
+    CanvasWebSocketContext::provide(canvas_websocket);
+
+    // Provide the registration callback as context too
+    provide_context(register_message_handler);
+
+    // Cleanup effect
+    let _ = RenderEffect::new(move |_| {
+        // Effect cleanup function
+        move || {
+            cleanup_websocket();
         }
     });
 
@@ -67,13 +235,16 @@ pub fn DrawingRoomPage(
                                 .get()
                                 .map(|room_data| {
                                     view! {
-                                        <div>
+                                        <div class="flex items-center space-x-2">
                                             <h1 class="text-xl font-semibold text-gray-800 dark:text-gray-200">
-                                                {room_data.room.name.clone()}
+                                                {room_data.room.name}
                                             </h1>
-                                            <p class="text-sm text-gray-500 dark:text-gray-400">
-                                                "Room Code: "{room_data.room.room_code.clone()}
-                                            </p>
+                                            <span class="text-sm text-gray-500 dark:text-gray-400">
+                                                "•"
+                                            </span>
+                                            <span class="text-sm text-gray-600 dark:text-gray-300">
+                                                {format!("{} players", room_data.players.len())}
+                                            </span>
                                         </div>
                                     }
                                         .into_any()
@@ -82,16 +253,18 @@ pub fn DrawingRoomPage(
                     </div>
 
                     <div class="flex items-center space-x-4">
-                        // Connection status
+                        // Connection status indicator
                         <div class="flex items-center space-x-2">
-                            <div class=format!(
-                                "w-2 h-2 rounded-full {}",
-                                if connection_status.get() == "Connected" {
-                                    "bg-mint-500"
-                                } else {
-                                    "bg-yellow-500 animate-pulse"
-                                },
-                            )></div>
+                            <div class=move || {
+                                format!(
+                                    "w-2 h-2 rounded-full {}",
+                                    if connected.get() {
+                                        "bg-mint-500"
+                                    } else {
+                                        "bg-yellow-500 animate-pulse"
+                                    },
+                                )
+                            }></div>
                             <span class="text-sm text-gray-600 dark:text-gray-300">
                                 {connection_status}
                             </span>
@@ -130,10 +303,10 @@ pub fn DrawingRoomPage(
                     {move || {
                         room_id
                             .get()
-                            .map(|_| {
+                            .map(|room_uuid| {
                                 view! {
                                     <div class="h-full flex items-center justify-center">
-                                        <OTDrawingCanvas />
+                                        <OTDrawingCanvas room_id=room_uuid.to_string() />
                                     </div>
                                 }
                                     .into_any()
