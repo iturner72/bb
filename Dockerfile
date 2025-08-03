@@ -39,7 +39,6 @@ COPY . .
 # Build the app
 ENV LEPTOS_ENV="PROD"
 RUN LEPTOS_TAILWIND_VERSION=v3.4.10 cargo leptos build --release -vv
-RUN cargo leptos build --release -vv
 
 # Build the download_models binary separately with ssr features
 RUN cargo build --bin download_models --release --features=ssr
