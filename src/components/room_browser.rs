@@ -3,7 +3,7 @@ use leptos_router::hooks::use_navigate;
 use uuid::Uuid;
 use std::sync::Arc;
 
-use crate::models::{CanvasRoomView, CreateRoomView, JoinRoomView};
+use crate::models::{CanvasRoomView, JoinRoomView};
 use super::drawing_rooms::*;
 use crate::components::drawing_rooms::CreateDrawingRoom;
 
@@ -11,7 +11,7 @@ use crate::components::drawing_rooms::CreateDrawingRoom;
 pub fn RoomBrowser() -> impl IntoView {
     let (show_create_form, set_show_create_form) = signal(false);
     let (join_code, set_join_code) = signal(String::new());
-    let (current_room, set_current_room) = signal(None::<Uuid>);
+    let (_current_room, set_current_room) = signal(None::<Uuid>);
 
     let navigate = use_navigate();
     
@@ -47,7 +47,6 @@ pub fn RoomBrowser() -> impl IntoView {
 
     // Clone Arc for use in view closures
     let navigate_for_create = navigate_arc.clone();
-    let navigate_for_rooms = navigate_arc.clone();
 
     view! {
         <div class="max-w-6xl mx-auto p-6 space-y-6">
@@ -115,8 +114,8 @@ pub fn RoomBrowser() -> impl IntoView {
                                 .err()
                                 .map(|e| {
                                     view! {
-                                        <div class="mt-3 p-3 bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-md">
-                                            <p class="text-sm text-red-700 dark:text-red-300">
+                                        <div class="mt-3 p-3 bg-salmon-100 dark:bg-salmon-900 border border-salmon-300 dark:border-salmon-700 rounded-md">
+                                            <p class="text-sm text-salmon-700 dark:text-salmon-300">
                                                 "Failed to join room: "{e.to_string()}
                                             </p>
                                         </div>
@@ -162,7 +161,7 @@ pub fn RoomBrowser() -> impl IntoView {
                         .into_any()
                 }>
                     {move || {
-                        let nav = navigate_for_rooms.clone();
+                        let join_action_clone = join_room_action;
                         rooms
                             .get()
                             .map(move |result| {
@@ -184,16 +183,18 @@ pub fn RoomBrowser() -> impl IntoView {
                                                         each=move || room_list.clone()
                                                         key=|room_item| room_item.room.id
                                                         children=move |room_item| {
-                                                            let _room_id = room_item.room.id;
-                                                            let nav_clone = nav.clone();
+                                                            let room_code = room_item.room.room_code.clone();
+                                                            let join_action_for_card = join_action_clone;
                                                             view! {
                                                                 <RoomCard
                                                                     room_item=room_item
                                                                     on_join=Callback::new(move |_room_id: uuid::Uuid| {
-                                                                        nav_clone(
-                                                                            &format!("/room/{}", _room_id),
-                                                                            Default::default(),
-                                                                        );
+                                                                        let join_room_request = JoinRoom {
+                                                                            join_data: JoinRoomView {
+                                                                                room_code: room_code.clone(),
+                                                                            },
+                                                                        };
+                                                                        join_action_for_card.dispatch(join_room_request);
                                                                     })
                                                                 />
                                                             }
@@ -208,7 +209,7 @@ pub fn RoomBrowser() -> impl IntoView {
                                     Err(e) => {
                                         view! {
                                             <div class="text-center py-8">
-                                                <p class="text-red-500">
+                                                <p class="text-salmon-500">
                                                     "Error loading rooms: "{e.to_string()}
                                                 </p>
                                                 <button
@@ -390,8 +391,8 @@ fn CreateRoomForm(
                                     .err()
                                     .map(|e| {
                                         view! {
-                                            <div class="mt-3 p-3 bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-md">
-                                                <p class="text-sm text-red-700 dark:text-red-300">
+                                            <div class="mt-3 p-3 bg-salmon-100 dark:bg-salmon-900 border border-salmon-300 dark:border-salmon-700 rounded-md">
+                                                <p class="text-sm text-salmon-700 dark:text-salmon-300">
                                                     "Error: "{e.to_string()}
                                                 </p>
                                             </div>
@@ -431,7 +432,7 @@ fn RoomCard(
                     if can_join {
                         "bg-mint-100 dark:bg-mint-900 text-mint-800 dark:text-mint-200"
                     } else {
-                        "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200"
+                        "bg-salmon-100 dark:bg-salmon-900 text-salmon-800 dark:text-salmon-200"
                     },
                 )>{if can_join { "Open" } else { "Full" }}</div>
             </div>

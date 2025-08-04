@@ -387,7 +387,7 @@ pub fn Poasts() -> impl IntoView {
                         Some(Err(e)) => {
                             console_log!("Error loading posts: {:?}", e);
                             view! {
-                                <div class="text-center text-red-500">"Error loading posts"</div>
+                                <div class="text-center text-salmon-500">"Error loading posts"</div>
                             }
                                 .into_any()
                         }

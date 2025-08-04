@@ -86,26 +86,27 @@ impl CanvasRoomManager {
 
 pub async fn canvas_ws_handler(
     ws: WebSocketUpgrade,
-    Path(room_id): Path<String>,
+    Path((room_id, user_id)): Path<(String, i32)>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     let client_id = format!("client-{}", uuid::Uuid::new_v4());
 
-    log::info!("Canvas client {} connecting to room {}", client_id, room_id);
+    log::info!("User {} (Canvas client {}) connecting to room {}", user_id, client_id, room_id);
 
     // add to room
     if let Some(canvas_manager) = state.canvas_manager.as_ref() {
         canvas_manager.add_client_to_room(room_id.clone(), client_id.clone()).await;
     }
 
-    ws.on_upgrade(move |socket| handle_canvas_socket(socket, state, room_id, client_id))
+    ws.on_upgrade(move |socket| handle_canvas_socket(socket, state, room_id, client_id, user_id))
 }
 
 async fn handle_canvas_socket(
     socket: WebSocket,
     state: AppState,
     room_id: String,
-    client_id: String
+    client_id: String,
+    user_id: i32,
 ) {
     let (mut sender, mut receiver) = socket.split();
     let canvas_manager = state.canvas_manager.clone();
@@ -216,7 +217,16 @@ async fn handle_canvas_socket(
         manager.remove_client_from_room(room_id.clone(), client_id.clone()).await;
     }
 
-    log::info!("Canvas client {} disconnected from room {}", client_id, room_id);
+    // remove from database room_players table (mark as inactive)
+    if let Ok(mut conn) = state.pool.get().await {
+        use crate::models::RoomPlayer;
+        if let Ok(room_uuid) = uuid::Uuid::parse_str(&room_id) {
+            let _ = RoomPlayer::leave_room(user_id, room_uuid, &mut conn).await;
+            log::info!("User {} automatically left room {} due to WebSocket disconnect", user_id, room_id);
+        }
+    }
+
+    log::info!("User {} (Canvas client {}) disconnected from room {}", user_id, client_id, room_id);
 }
 
 #[derive(Debug)]

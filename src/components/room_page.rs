@@ -24,8 +24,8 @@ pub fn DrawingRoomPage(
 ) -> impl IntoView {
     let (current_room_data, set_current_room_data) = signal(None::<RoomWithPlayersView>);
     let (show_players_panel, set_show_players_panel) = signal(true);
-    let (connection_status, set_connection_status) = signal("Connecting...".to_string());
-    let (connected, set_connected) = signal(false);
+    let (_connection_status, _set_connection_status) = signal("Connecting...".to_string());
+    let (connected, _set_connected) = signal(false);
 
     // WebSocket state - managed at room level using thread-local storage
     cfg_if::cfg_if! {
@@ -38,10 +38,10 @@ pub fn DrawingRoomPage(
     }
 
     // Message handler callback - will be passed to canvas
-    let (message_handler, set_message_handler) = signal(None::<Callback<CanvasMessage>>);
+    let (_message_handler, _set_message_handler) = signal(None::<Callback<CanvasMessage>>);
 
     // WebSocket send function
-    let send_message = Callback::new(move |_message: CanvasMessage| {
+    let _send_message = Callback::new(move |_message: CanvasMessage| {
         cfg_if::cfg_if! {
             if #[cfg(feature = "hydrate")] {
                 ROOM_WEBSOCKET.with(|ws_cell| {
@@ -58,8 +58,8 @@ pub fn DrawingRoomPage(
     // Create WebSocket interface
     let canvas_websocket = CanvasWebSocket::new(
         connected,
-        send_message,
-        connection_status,
+        _send_message,
+        _connection_status,
     );
 
     // Setup WebSocket when room_id changes
@@ -80,18 +80,19 @@ pub fn DrawingRoomPage(
                 };
 
                 let ws_url = format!(
-                    "{}://{}/ws/canvas/{}",
+                    "{}://{}/ws/canvas/{}/{}",
                     protocol,
                     web_sys::window().unwrap().location().host().unwrap(),
-                    _room_uuid
+                    _room_uuid,
+                    1 // TODO: need actual user_id from auth context
                 );
 
                 match web_sys::WebSocket::new(&ws_url) {
                     Ok(ws) => {
                         // Connection opened
-                        let set_connected_clone = set_connected;
-                        let set_status_clone = set_connection_status;
-                        let send_message_clone = send_message;
+                        let set_connected_clone = _set_connected;
+                        let set_status_clone = _set_connection_status;
+                        let send_message_clone = _send_message;
                         let open_closure = Closure::wrap(Box::new(move || {
                             set_connected_clone.set(true);
                             set_status_clone.set("Connected".to_string());
@@ -100,15 +101,15 @@ pub fn DrawingRoomPage(
                         }) as Box<dyn FnMut()>);
 
                         // Connection closed
-                        let set_connected_clone = set_connected;
-                        let set_status_clone = set_connection_status;
+                        let set_connected_clone = _set_connected;
+                        let set_status_clone = _set_connection_status;
                         let close_closure = Closure::wrap(Box::new(move || {
                             set_connected_clone.set(false);
                             set_status_clone.set("Disconnected".to_string());
                         }) as Box<dyn FnMut()>);
 
                         // Message received
-                        let message_handler_signal = message_handler;
+                        let message_handler_signal = _message_handler;
                         let message_closure = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
                             if let Some(text) = e.data().as_string() {
                                 match serde_json::from_str::<CanvasMessage>(&text) {
@@ -141,7 +142,7 @@ pub fn DrawingRoomPage(
                     }
                     Err(err) => {
                         log::error!("Failed to connect to WebSocket: {:?}", err);
-                        set_connection_status.set("Connection failed".to_string());
+                        _set_connection_status.set("Connection failed".to_string());
                     }
                 }
             }
@@ -184,9 +185,31 @@ pub fn DrawingRoomPage(
         }
     };
 
+    let navigate = use_navigate();
+
+    let leave_room_action = Action::new(move |room_id: &Uuid| {
+        let id = *room_id;
+        async move { leave_room(id).await }
+    });
+
+    // Effect for navigation after successful leave
+    Effect::new(move |_| {
+        if let Some(Ok(())) = leave_room_action.value().get() {
+            navigate("/rooms", Default::default());
+        }
+    });
+
+    // handle leave room - closes websocket first, then calls server action
+    let handle_leave_room = move |_| {
+        cleanup_websocket();
+        if let Some(id) = room_id.get() {
+            leave_room_action.dispatch(id);
+        }
+    }; 
+
     // Register message handler from canvas
     let register_message_handler = Callback::new(move |handler: Callback<CanvasMessage>| {
-        set_message_handler.set(Some(handler));
+        _set_message_handler.set(Some(handler));
     });
 
     // Provide WebSocket context to child components
@@ -209,8 +232,12 @@ pub fn DrawingRoomPage(
             <div class="bg-white dark:bg-teal-800 shadow-sm border-b border-gray-200 dark:border-teal-700 p-4">
                 <div class="flex justify-between items-center">
                     <div class="flex items-center space-x-4">
-                        <a
-                            href="/rooms"
+                        <button
+                            on:click=move |_| {
+                                if let Some(id) = room_id.get() {
+                                    leave_room_action.dispatch(id);
+                                }
+                            }
                             class="text-seafoam-600 dark:text-seafoam-400 hover:text-seafoam-700 
                             dark:hover:text-seafoam-300 flex items-center space-x-1"
                         >
@@ -228,7 +255,7 @@ pub fn DrawingRoomPage(
                                 />
                             </svg>
                             <span>"Back to Rooms"</span>
-                        </a>
+                        </button>
 
                         {move || {
                             current_room_data
@@ -266,7 +293,7 @@ pub fn DrawingRoomPage(
                                 )
                             }></div>
                             <span class="text-sm text-gray-600 dark:text-gray-300">
-                                {connection_status}
+                                {_connection_status}
                             </span>
                         </div>
 
@@ -321,7 +348,12 @@ pub fn DrawingRoomPage(
                             let room_data = current_room_data.get().unwrap();
                             view! {
                                 <div class="w-80 bg-white dark:bg-teal-800 border-l border-gray-200 dark:border-teal-700 p-4 overflow-y-auto">
-                                    <PlayersPanel room_data=room_data room_id=room_id />
+                                    <PlayersPanel
+                                        room_data=room_data
+                                        room_id=room_id 
+                                        on_leave=Callback::new(handle_leave_room)
+                                        pending=leave_room_action.pending()
+                                    />
                                 </div>
                             }
                                 .into_any()
@@ -336,26 +368,14 @@ pub fn DrawingRoomPage(
 fn PlayersPanel(
     room_data: RoomWithPlayersView,
     #[prop(into)] room_id: Signal<Option<Uuid>>,
+    #[prop(into)] on_leave: Callback<()>,
+    #[prop(into)] pending: Signal<bool>,
 ) -> impl IntoView {
     let players = room_data.players;
     let room = room_data.room;
-    let navigate = use_navigate();
-
-    let leave_room_action = Action::new(move |room_id: &Uuid| {
-        let id = *room_id;
-        async move { leave_room(id).await }
-    });
-
-    Effect::new(move |_| {
-        if let Some(Ok(())) = leave_room_action.value().get() {
-            navigate("/rooms", Default::default());
-        }
-    });
 
     let handle_leave_room = move |_| {
-        if let Some(id) = room_id.get() {
-            leave_room_action.dispatch(id);
-        }
+        on_leave.run(());
     };
 
     view! {
@@ -392,13 +412,13 @@ fn PlayersPanel(
             <div class="border-t border-gray-200 dark:border-teal-700 pt-4">
                 <button
                     on:click=handle_leave_room
-                    disabled=move || leave_room_action.pending().get()
-                    class="w-full px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 
-                    disabled:cursor-not-allowed text-white font-medium rounded-md 
+                    disabled=move || pending.get() 
+                    class="w-full px-4 py-2 bg-salmon-600 hover:bg-salmon-700 disabled:bg-salmon-400 
+                    disabled:cursor-not-allowed text-gray-300 font-medium rounded-md 
                     transition-colors flex items-center justify-center space-x-2"
                 >
                     {move || {
-                        if leave_room_action.pending().get() {
+                        if pending.get() {
                             view! {
                                 <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                                 <span>"Leaving..."</span>
@@ -425,29 +445,6 @@ fn PlayersPanel(
                         }
                     }}
                 </button>
-
-                // Show error if leave room fails
-                {move || {
-                    leave_room_action
-                        .value()
-                        .get()
-                        .and_then(|result| {
-                            if let Err(error) = result {
-                                Some(
-                                    view! {
-                                        <div class="mt-2 p-2 bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-md">
-                                            <p class="text-sm text-red-700 dark:text-red-300">
-                                                "Failed to leave room: "{error.to_string()}
-                                            </p>
-                                        </div>
-                                    }
-                                        .into_any(),
-                                )
-                            } else {
-                                None
-                            }
-                        })
-                }}
             </div>
 
             // Players list

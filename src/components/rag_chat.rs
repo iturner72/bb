@@ -271,7 +271,7 @@ pub fn RagChat() -> impl IntoView {
                             .then(|| {
                                 view! {
                                     <button
-                                        class="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors"
+                                        class="px-3 py-1 text-sm bg-salmon-500 hover:bg-salmon-600 text-gray-300 rounded-md transition-colors"
                                         on:click=move |_| cancel_current_request()
                                     >
                                         "Cancel"

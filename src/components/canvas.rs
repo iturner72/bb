@@ -1,6 +1,5 @@
 use cfg_if::cfg_if;
 use leptos::prelude::*;
-use wasm_bindgen::JsCast;
 
 use super::canvas_sync::{
     client_state::ClientCanvasState,
@@ -11,6 +10,7 @@ use super::canvas_sync::{
 cfg_if! {
     if #[cfg(feature = "hydrate")] {
         use web_sys::{js_sys, CanvasRenderingContext2d};
+        use wasm_bindgen::JsCast;
     }
 }
 
@@ -362,9 +362,9 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                             format!(
                                 "px-2 py-1 rounded {}",
                                 if canvas_websocket.is_connected() {
-                                    "bg-green-500 text-white"
+                                    "bg-seafoam-500 text-gray-300"
                                 } else {
-                                    "bg-red-500 text-white"
+                                    "bg-salmon-500 text-gray-300"
                                 },
                             )
                         }>
@@ -473,7 +473,7 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
 
                     <button
                         on:click=clear_canvas
-                        class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors"
+                        class="bg-salmon-500 hover:bg-salmon-600 text-gray-300 px-3 py-1 rounded text-sm transition-colors"
                         title="Clear entire canvas"
                     >
                         "Clear"

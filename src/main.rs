@@ -83,7 +83,7 @@ cfg_if! {
                     "/api/{*fn_name}",
                     get(server_fn_handler).post(server_fn_handler),
                 )
-                .route("/ws/canvas/{:room_id}", get(canvas_ws_handler))
+                .route("/ws/canvas/{:room_id}/{:user_id}", get(canvas_ws_handler))
                 .merge(protected_routes)
                 .leptos_routes_with_handler(routes, get(|State(app_state): State<AppState>, request: Request<AxumBody>| async move {
                     let handler = leptos_axum::render_app_to_stream_with_context(

@@ -90,7 +90,7 @@ pub fn AdminLogin() -> impl IntoView {
                                     .get()
                                     .map(|err| {
                                         view! {
-                                            <div class="mt-2 text-sm text-red-600 dark:text-red-400">
+                                            <div class="mt-2 text-sm text-salmon-600 dark:text-salmon-400">
                                                 {err}
                                             </div>
                                         }
