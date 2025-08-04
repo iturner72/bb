@@ -473,7 +473,7 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
 
                     <button
                         on:click=clear_canvas
-                        class="bg-salmon-500 hover:bg-salmon-600 text-gray-300 px-3 py-1 rounded text-sm transition-colors"
+                        class="bg-salmon-500 hover:bg-salmon-600 text-white px-3 py-1 rounded text-sm transition-colors"
                         title="Clear entire canvas"
                     >
                         "Clear"

@@ -19,7 +19,8 @@ cfg_if! {
         use leptos_axum::{generate_route_list, handle_server_fns_with_context, LeptosRoutes};
         use std::net::SocketAddr;
         use bb::app::*;
-        use bb::auth::server::middleware::require_auth;
+        use bb::auth::server::middleware::require_auth_no_db;
+        use bb::auth::oauth::{google_login, discord_login, google_callback, discord_callback};
         use bb::database::db::establish_connection;
         use bb::state::AppState;
         use bb::handlers::*;
@@ -49,6 +50,7 @@ cfg_if! {
                 leptos_options: leptos_options.clone(),
                 pool,
                 sse_state: SseState::new(),
+                oauth_states: Arc::new(dashmap::DashMap::new()),
                 drawing_tx: broadcast::Sender::new(100),
                 user_count: Arc::new(Mutex::new(0)),
                 canvas_manager: Some(CanvasRoomManager::new()),
@@ -67,7 +69,15 @@ cfg_if! {
                 .await
             }
 
+            // OAuth routes (public)
+            let oauth_routes = Router::new()
+                .route("/auth/google", get(google_login))
+                .route("/auth/google-callback", get(google_callback))
+                .route("/auth/discord", get(discord_login))
+                .route("/auth/discord/callback", get(discord_callback));
+
             let protected_routes = Router::new()
+                .route("/ws/canvas/{:room_id}/{:user_id}", get(canvas_ws_handler))
                 .route("/api/create-stream", get(create_stream))
                 .route("/api/cancel-stream", get(cancel_stream))
                 .route("/api/rss-progress", get(rss_progress_handler))
@@ -76,14 +86,17 @@ cfg_if! {
                 .route("/api/refresh-summaries", get(refresh_summaries_handler))
                 .route("/api/generate-embeddings", get(embeddings_generation_handler))
                 .route("/api/generate-local-embeddings", get(local_embeddings_generation_handler))
-                .layer(middleware::from_fn(require_auth));
+                .layer(middleware::from_fn_with_state(
+                    app_state.clone(),
+                    require_auth_no_db
+                ));
 
             let app = Router::new()
                 .route(
                     "/api/{*fn_name}",
                     get(server_fn_handler).post(server_fn_handler),
                 )
-                .route("/ws/canvas/{:room_id}/{:user_id}", get(canvas_ws_handler))
+                .merge(oauth_routes)
                 .merge(protected_routes)
                 .leptos_routes_with_handler(routes, get(|State(app_state): State<AppState>, request: Request<AxumBody>| async move {
                     let handler = leptos_axum::render_app_to_stream_with_context(

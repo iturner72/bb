@@ -414,7 +414,7 @@ fn PlayersPanel(
                     on:click=handle_leave_room
                     disabled=move || pending.get() 
                     class="w-full px-4 py-2 bg-salmon-600 hover:bg-salmon-700 disabled:bg-salmon-400 
-                    disabled:cursor-not-allowed text-gray-300 font-medium rounded-md 
+                    disabled:cursor-not-allowed text-white font-medium rounded-md 
                     transition-colors flex items-center justify-center space-x-2"
                 >
                     {move || {

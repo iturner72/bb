@@ -408,9 +408,11 @@ dependencies = [
  "leptos_router",
  "log",
  "memmap2",
+ "oauth-axum",
  "once_cell",
  "postgrest",
  "pulldown-cmark",
+ "rand 0.8.5",
  "reqwest 0.12.19",
  "rustls 0.23.31",
  "rustls-platform-verifier",
@@ -3010,6 +3012,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
+name = "oauth-axum"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "559e8ae45a25c1cc64c5ccbdc01da6b1c9729802086b3811edf908311cd83064"
+dependencies = [
+ "async-trait",
+ "oauth2",
+]
+
+[[package]]
+name = "oauth2"
+version = "4.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c38841cdd844847e3e7c8d29cef9dcfed8877f8f56f9071f77843ecf3baf937f"
+dependencies = [
+ "base64 0.13.1",
+ "chrono",
+ "getrandom 0.2.15",
+ "http 0.2.12",
+ "rand 0.8.5",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "sha2",
+ "thiserror 1.0.61",
+ "url",
+]
+
+[[package]]
 name = "object"
 version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5444,6 +5476,7 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]
