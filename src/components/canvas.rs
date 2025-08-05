@@ -354,13 +354,13 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
     view! {
         <div class="w-full h-full flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
             // Enhanced status bar with pending operations and undo status
-            <div class="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 px-4 py-2">
-                <div class="flex items-center justify-between text-sm">
-                    <div class="flex items-center space-x-4">
+            <div class="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 px-2 sm:px-4 py-2">
+                <div class="flex items-center justify-between text-xs sm:text-sm">
+                    <div class="flex items-center space-x-2 sm:space-x-4">
                         // Connection status
                         <div class=move || {
                             format!(
-                                "px-2 py-1 rounded {}",
+                                "px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-xs {}",
                                 if canvas_websocket.is_connected() {
                                     "bg-seafoam-500 text-gray-300"
                                 } else {
@@ -377,33 +377,35 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                             }}
                         </div>
 
-                        // Status message
-                        <div class="text-gray-600 dark:text-gray-400">{status_message}</div>
+                        // Status message - hidden on very small screens
+                        <div class="hidden sm:block text-gray-600 dark:text-gray-400">
+                            {status_message}
+                        </div>
 
-                        // Pending operations and undo status
+                        // Pending operations and undo status - simplified on mobile
                         <div class="text-gray-500 dark:text-gray-400">
                             {move || {
                                 canvas_state
                                     .with(|client_state| {
                                         format!(
-                                            "Pending: {} | Can undo: {}",
+                                            "P:{} | U:{}",
                                             client_state.get_pending_operations().len(),
-                                            if client_state.can_undo() { "Yes" } else { "No" },
+                                            if client_state.can_undo() { "Y" } else { "N" },
                                         )
                                     })
                             }}
                         </div>
                     </div>
 
-                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                    <div class="text-xs text-gray-500 dark:text-gray-400 hidden md:block">
                         "Room: " {room_id} " • User: " {user_id}
                     </div>
                 </div>
             </div>
 
-            // Enhanced toolbar with better styling
-            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
-                <div class="flex items-center space-x-4">
+            // Enhanced toolbar with mobile-first responsive design
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between p-2 sm:p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 gap-3 sm:gap-0">
+                <div class="flex items-center justify-center sm:justify-start space-x-3 sm:space-x-4">
                     // Color picker
                     <div class="flex items-center space-x-2">
                         <label
@@ -420,11 +422,11 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                                 let value = event_target_value(&e);
                                 set_color.set(value);
                             }
-                            class="w-10 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
+                            class="w-10 h-10 sm:w-10 sm:h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
                         />
                     </div>
 
-                    // Brush size slider with better styling
+                    // Brush size slider with better mobile sizing
                     <div class="flex items-center space-x-2">
                         <label
                             for="brush-size"
@@ -442,38 +444,40 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                                 let value = event_target_value(&e).parse().unwrap_or(5);
                                 set_brush_size.set(value);
                             }
-                            class="w-24"
+                            class="w-20 sm:w-24"
                         />
-                        <span class="text-sm text-gray-600 dark:text-gray-400 w-8">
+                        <span class="text-sm text-gray-600 dark:text-gray-400 w-6 sm:w-8">
                             {brush_size}
                         </span>
                     </div>
                 </div>
 
-                // Action buttons with enhanced styling and disabled states
-                <div class="flex items-center space-x-2">
+                // Action buttons with mobile-optimized layout
+                <div class="flex items-center justify-center space-x-2">
                     <button
                         on:click=undo
-                        class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1 rounded text-sm disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                        class="bg-teal-500 hover:bg-teal-600 active:bg-teal-700 text-white px-3 py-2 sm:py-1 rounded text-sm disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors touch-manipulation"
                         disabled=move || {
                             canvas_state.with(|canvas_state| { !canvas_state.can_undo() })
                         }
                         title="Undo last action (Ctrl+Z)"
                     >
-                        "Undo (Ctrl+Z)"
+                        <span class="sm:hidden">"Undo"</span>
+                        <span class="hidden sm:inline">"Undo (Ctrl+Z)"</span>
                     </button>
 
                     <button
                         on:click=save_canvas
-                        class="bg-mint-400 hover:bg-mint-600 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
+                        class="bg-mint-400 hover:bg-mint-600 active:bg-mint-700 text-gray-700 px-3 py-2 sm:py-1 rounded text-sm transition-colors touch-manipulation"
                         title="Save canvas as SVG (Ctrl+S)"
                     >
-                        "Save (Ctrl+S)"
+                        <span class="sm:hidden">"Save"</span>
+                        <span class="hidden sm:inline">"Save (Ctrl+S)"</span>
                     </button>
 
                     <button
                         on:click=clear_canvas
-                        class="bg-salmon-500 hover:bg-salmon-600 text-white px-3 py-1 rounded text-sm transition-colors"
+                        class="bg-salmon-500 hover:bg-salmon-600 active:bg-salmon-700 text-white px-3 py-2 sm:py-1 rounded text-sm transition-colors touch-manipulation"
                         title="Clear entire canvas"
                     >
                         "Clear"
@@ -481,14 +485,15 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                 </div>
             </div>
 
-            // Canvas area with enhanced border and shadow
-            <div class="flex-1 flex items-center justify-center p-4">
-                <div class="border-2 border-gray-300 dark:border-gray-600 rounded-lg shadow-lg overflow-hidden">
+            // Canvas area with mobile-optimized sizing and touch handling
+            <div class="flex-1 flex items-center justify-center p-1 sm:p-4">
+                <div class="w-full h-full max-w-full max-h-full sm:w-auto sm:h-auto border-2 border-gray-300 dark:border-gray-600 rounded-lg shadow-lg overflow-hidden">
                     <canvas
                         node_ref=canvas_ref
                         width="800"
                         height="600"
-                        class="bg-gray-100 dark:bg-white cursor-crosshair touch-none"
+                        class="w-full h-full sm:w-auto sm:h-auto bg-gray-100 dark:bg-white cursor-crosshair touch-none select-none"
+                        style="max-width: 100%; max-height: 100%; object-fit: contain;"
                         on:mousedown=on_mouse_down
                         on:mousemove=on_mouse_move
                         on:mouseup=on_mouse_up
@@ -504,11 +509,13 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                 </div>
             </div>
 
-            // Enhanced footer with operational transform info
-            <div class="p-3 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+            // Enhanced footer with mobile-friendly text
+            <div class="p-2 sm:p-3 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
                 <div class="text-center text-xs text-gray-600 dark:text-gray-400 max-w-lg mx-auto">
-                    "Operational Transform ensures consistency across all connected clients. "
-                    "Draw collaboratively with automatic conflict resolution!"
+                    <span class="sm:hidden">"Collaborative drawing with real-time sync!"</span>
+                    <span class="hidden sm:inline">
+                        "Operational Transform ensures consistency across all connected clients. Draw collaboratively with automatic conflict resolution!"
+                    </span>
                 </div>
             </div>
         </div>

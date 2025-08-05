@@ -228,11 +228,11 @@ pub fn DrawingRoomPage(
     });
 
     view! {
-        <div class="h-screen flex flex-col bg-gray-100 dark:bg-teal-900">
-            // Header with room info
-            <div class="bg-white dark:bg-teal-800 shadow-sm border-b border-gray-200 dark:border-teal-700 p-4">
+        <div class="h-screen flex flex-col bg-gray-100 dark:bg-teal-900 relative">
+            // Mobile-optimized header
+            <div class="bg-white dark:bg-teal-800 shadow-sm border-b border-gray-200 dark:border-teal-700 p-2 sm:p-4">
                 <div class="flex justify-between items-center">
-                    <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2 sm:space-x-4 flex-1 min-w-0">
                         <button
                             on:click=move |_| {
                                 if let Some(id) = room_id.get() {
@@ -240,10 +240,10 @@ pub fn DrawingRoomPage(
                                 }
                             }
                             class="text-seafoam-600 dark:text-seafoam-400 hover:text-seafoam-700 
-                            dark:hover:text-seafoam-300 flex items-center space-x-1"
+                            dark:hover:text-seafoam-300 flex items-center space-x-1 touch-manipulation p-1 sm:p-0"
                         >
                             <svg
-                                class="w-4 h-4"
+                                class="w-4 h-4 sm:w-5 sm:h-5"
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
@@ -255,7 +255,8 @@ pub fn DrawingRoomPage(
                                     d="M15 19l-7-7 7-7"
                                 />
                             </svg>
-                            <span>"Back to Rooms"</span>
+                            <span class="hidden sm:inline">"Back to Rooms"</span>
+                            <span class="sm:hidden text-xs">"Back"</span>
                         </button>
 
                         {move || {
@@ -263,15 +264,18 @@ pub fn DrawingRoomPage(
                                 .get()
                                 .map(|room_data| {
                                     view! {
-                                        <div class="flex items-center space-x-2">
-                                            <h1 class="text-xl font-semibold text-gray-800 dark:text-gray-200">
+                                        <div class="flex items-center space-x-1 sm:space-x-2 flex-1 min-w-0">
+                                            <h1 class="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-200 truncate">
                                                 {room_data.room.name}
                                             </h1>
-                                            <span class="text-sm text-gray-500 dark:text-gray-400">
+                                            <span class="text-sm text-gray-500 dark:text-gray-400 hidden sm:inline">
                                                 "•"
                                             </span>
-                                            <span class="text-sm text-gray-600 dark:text-gray-300">
-                                                {format!("{} players", room_data.players.len())}
+                                            <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-300 shrink-0">
+                                                <span class="sm:hidden">{room_data.players.len()}</span>
+                                                <span class="hidden sm:inline">
+                                                    {format!("{} players", room_data.players.len())}
+                                                </span>
                                             </span>
                                         </div>
                                     }
@@ -280,12 +284,12 @@ pub fn DrawingRoomPage(
                         }}
                     </div>
 
-                    <div class="flex items-center space-x-4">
-                        // Connection status indicator
-                        <div class="flex items-center space-x-2">
+                    <div class="flex items-center space-x-2 sm:space-x-4 shrink-0">
+                        // Connection status indicator - simplified on mobile
+                        <div class="flex items-center space-x-1 sm:space-x-2">
                             <div class=move || {
                                 format!(
-                                    "w-2 h-2 rounded-full {}",
+                                    "w-2 h-2 sm:w-3 sm:h-3 rounded-full {}",
                                     if connected.get() {
                                         "bg-mint-500"
                                     } else {
@@ -293,17 +297,17 @@ pub fn DrawingRoomPage(
                                     },
                                 )
                             }></div>
-                            <span class="text-sm text-gray-600 dark:text-gray-300">
+                            <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-300 hidden sm:inline">
                                 {_connection_status}
                             </span>
                         </div>
 
-                        // Players panel toggle
+                        // Players panel toggle with better mobile design
                         <button
                             on:click=move |_| set_show_players_panel(!show_players_panel.get())
                             class="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 
                             dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-teal-700 
-                            rounded-md transition-colors"
+                            rounded-md transition-colors touch-manipulation relative"
                             title="Toggle players panel"
                         >
                             <svg
@@ -319,15 +323,32 @@ pub fn DrawingRoomPage(
                                     d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
                                 />
                             </svg>
+                            // Notification badge for mobile
+                            {move || {
+                                current_room_data
+                                    .get()
+                                    .map(|room_data| {
+                                        if room_data.players.len() > 0 {
+                                            view! {
+                                                <span class="absolute -top-1 -right-1 bg-mint-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center sm:hidden">
+                                                    {room_data.players.len()}
+                                                </span>
+                                            }
+                                                .into_any()
+                                        } else {
+                                            view! {}.into_any()
+                                        }
+                                    })
+                            }}
                         </button>
                     </div>
                 </div>
             </div>
 
-            // Main content area
-            <div class="flex-1 flex overflow-hidden">
-                // Canvas area
-                <div class="flex-1 p-4">
+            // Main content area with mobile-responsive layout
+            <div class="flex-1 flex overflow-hidden relative">
+                // Canvas area - full width on mobile, responsive on desktop
+                <div class="flex-1 p-1 sm:p-4">
                     {move || {
                         room_id
                             .get()
@@ -342,20 +363,67 @@ pub fn DrawingRoomPage(
                     }}
                 </div>
 
-                // Players panel
+                // Players panel - overlay on mobile, sidebar on desktop
                 {move || {
                     (show_players_panel.get() && current_room_data.get().is_some())
                         .then(|| {
                             let room_data = current_room_data.get().unwrap();
                             view! {
-                                <div class="w-80 bg-white dark:bg-teal-800 border-l border-gray-200 dark:border-teal-700 p-4 overflow-y-auto">
-                                    <PlayersPanel
-                                        room_data=room_data
-                                        room_id=room_id
-                                        on_leave=Callback::new(handle_leave_room)
-                                        pending=leave_room_action.pending()
-                                    />
-                                </div>
+                                <>
+                                    // Mobile overlay backdrop
+                                    <div
+                                        class="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
+                                        on:click=move |_| set_show_players_panel(false)
+                                    ></div>
+
+                                    // Players panel
+                                    <div class="fixed lg:relative inset-y-0 right-0 z-50 lg:z-auto
+                                    w-80 sm:w-96 lg:w-80 xl:w-96
+                                    bg-white dark:bg-teal-800 
+                                    border-l border-gray-200 dark:border-teal-700 
+                                    shadow-xl lg:shadow-none
+                                    transform transition-transform duration-300 ease-in-out
+                                    lg:transform-none
+                                    flex flex-col">
+
+                                        // Mobile panel header
+                                        <div class="lg:hidden flex items-center justify-between p-4 border-b border-gray-200 dark:border-teal-700">
+                                            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                                                Players
+                                            </h2>
+                                            <button
+                                                on:click=move |_| set_show_players_panel(false)
+                                                class="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 
+                                                 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-teal-700 
+                                                 rounded-md transition-colors touch-manipulation"
+                                            >
+                                                <svg
+                                                    class="w-5 h-5"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path
+                                                        stroke-linecap="round"
+                                                        stroke-linejoin="round"
+                                                        stroke-width="2"
+                                                        d="M6 18L18 6M6 6l12 12"
+                                                    />
+                                                </svg>
+                                            </button>
+                                        </div>
+
+                                        // Panel content with proper scrolling
+                                        <div class="flex-1 p-3 sm:p-4 overflow-y-auto">
+                                            <PlayersPanel
+                                                room_data=room_data
+                                                room_id=room_id
+                                                on_leave=Callback::new(handle_leave_room)
+                                                pending=leave_room_action.pending()
+                                            />
+                                        </div>
+                                    </div>
+                                </>
                             }
                                 .into_any()
                         })
@@ -380,43 +448,53 @@ fn PlayersPanel(
     };
 
     view! {
-        <div class="space-y-6">
-            // Room info
-            <div>
-                <h2 class="font-semibold text-gray-800 dark:text-gray-200 mb-3">"Room Info"</h2>
-                <div class="space-y-2 text-sm">
-                    <div class="flex justify-between">
+        <div class="space-y-4 sm:space-y-6 h-full overflow-y-auto">
+            // Room info with better mobile spacing
+            <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 sm:p-4">
+                <h2 class="font-semibold text-gray-800 dark:text-gray-200 mb-3 text-base sm:text-lg">
+                    "Room Info"
+                </h2>
+                <div class="space-y-3 text-sm">
+                    <div class="flex justify-between items-center">
                         <span class="text-gray-600 dark:text-gray-400">"Players:"</span>
-                        <span class="text-gray-800 dark:text-gray-200">
+                        <span class="text-gray-800 dark:text-gray-200 font-medium">
                             {room.player_count}" / "{room.max_players.unwrap_or(999)}
                         </span>
                     </div>
-                    <div class="flex justify-between">
+                    <div class="flex justify-between items-center">
                         <span class="text-gray-600 dark:text-gray-400">"Mode:"</span>
-                        <span class="text-gray-800 dark:text-gray-200 capitalize">
+                        <span class="text-gray-800 dark:text-gray-200 capitalize font-medium">
                             {room
                                 .game_mode
                                 .unwrap_or_else(|| "freeplay".to_string())
                                 .replace("_", " ")}
                         </span>
                     </div>
-                    <div class="flex justify-between">
+                    <div class="flex justify-between items-center">
                         <span class="text-gray-600 dark:text-gray-400">"Privacy:"</span>
-                        <span class="text-gray-800 dark:text-gray-200">
+                        <span class=format!(
+                            "px-2 py-1 text-xs rounded-full font-medium {}",
+                            if room.is_private.unwrap_or(false) {
+                                "bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200"
+                            } else {
+                                "bg-mint-100 dark:bg-mint-900 text-mint-800 dark:text-mint-200"
+                            },
+                        )>
                             {if room.is_private.unwrap_or(false) { "Private" } else { "Public" }}
                         </span>
                     </div>
                 </div>
             </div>
 
-            // Leave Room Button
-            <div class="border-t border-gray-200 dark:border-teal-700 pt-4">
+            // Leave Room Button with better mobile sizing
+            <div class="px-1">
                 <button
                     on:click=handle_leave_room
                     disabled=move || pending.get()
-                    class="w-full px-4 py-2 bg-salmon-600 hover:bg-salmon-700 disabled:bg-salmon-400 
-                    disabled:cursor-not-allowed text-white font-medium rounded-md 
-                    transition-colors flex items-center justify-center space-x-2"
+                    class="w-full px-4 py-3 sm:py-2 bg-salmon-600 hover:bg-salmon-700 active:bg-salmon-800 
+                    disabled:bg-salmon-400 disabled:cursor-not-allowed text-white font-medium rounded-lg 
+                    transition-all duration-200 flex items-center justify-center space-x-2 touch-manipulation
+                    shadow-sm hover:shadow-md"
                 >
                     {move || {
                         if pending.get() {
@@ -448,62 +526,102 @@ fn PlayersPanel(
                 </button>
             </div>
 
-            // Players list
-            <div>
-                <h2 class="font-semibold text-gray-800 dark:text-gray-200 mb-3">
-                    "Players ("{players.len()}")"
-                </h2>
+            // Players list with much better design
+            <div class="flex-1">
+                <div class="flex items-center justify-between mb-3 px-1">
+                    <h2 class="font-semibold text-gray-800 dark:text-gray-200 text-base sm:text-lg">
+                        "Players"
+                    </h2>
+                    <span class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">
+                        {players.len()}
+                    </span>
+                </div>
                 <div class="space-y-2">
                     <For
                         each=move || players.clone()
                         key=|player| player.id
                         children=move |player| {
                             view! {
-                                <div class="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-teal-700">
-                                    <UserAvatar
-                                        avatar_url=player
-                                            .user
-                                            .as_ref()
-                                            .and_then(|u| u.avatar_url.clone())
-                                        display_name=player
-                                            .user
-                                            .as_ref()
-                                            .and_then(|u| u.display_name.clone().or(u.username.clone()))
-                                        size=AvatarSize::Medium
-                                    />
-                                    <div class="flex-1 min-w-0">
-                                        <p class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
-                                            {player
+                                <div class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 
+                                transition-colors duration-200 border border-transparent hover:border-gray-200 
+                                dark:hover:border-gray-600 cursor-pointer group">
+                                    <div class="relative">
+                                        <UserAvatar
+                                            avatar_url=player
                                                 .user
                                                 .as_ref()
-                                                .and_then(|u| {
-                                                    u.display_name.as_ref().or(u.username.as_ref())
-                                                })
-                                                .cloned()
-                                                .unwrap_or_else(|| format!("Player {}", player.user_id))}
-                                        </p>
+                                                .and_then(|u| u.avatar_url.clone())
+                                            display_name=player
+                                                .user
+                                                .as_ref()
+                                                .and_then(|u| u.display_name.clone().or(u.username.clone()))
+                                            size=AvatarSize::Medium
+                                        />
+                                        // Larger, more visible status indicator with animation
+                                        <div class=format!(
+                                            "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-gray-800 {}",
+                                            if player.is_active.unwrap_or(false) {
+                                                "bg-mint-500 animate-pulse"
+                                            } else {
+                                                "bg-gray-400"
+                                            },
+                                        )></div>
+                                    </div>
+
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center space-x-2">
+                                            <p class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors">
+                                                {player
+                                                    .user
+                                                    .as_ref()
+                                                    .and_then(|u| {
+                                                        u.display_name.as_ref().or(u.username.as_ref())
+                                                    })
+                                                    .cloned()
+                                                    .unwrap_or_else(|| format!("Player {}", player.user_id))}
+                                            </p>
+                                            {if player.is_active.unwrap_or(false) {
+                                                view! {
+                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-mint-100 dark:bg-mint-900 text-mint-800 dark:text-mint-200">
+                                                        "Online"
+                                                    </span>
+                                                }
+                                                    .into_any()
+                                            } else {
+                                                view! {
+                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                                                        "Away"
+                                                    </span>
+                                                }
+                                                    .into_any()
+                                            }}
+                                        </div>
                                         {player
                                             .role
                                             .as_ref()
                                             .map(|role| {
+                                                let role_class = match role.as_str() {
+                                                    "host" | "admin" => {
+                                                        "bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200"
+                                                    }
+                                                    "moderator" => {
+                                                        "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                                                    }
+                                                    _ => {
+                                                        "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                                                    }
+                                                };
                                                 view! {
-                                                    <p class="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                                                        {role.clone()}
-                                                    </p>
+                                                    <div class="mt-1">
+                                                        <span class=format!(
+                                                            "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize {}",
+                                                            role_class,
+                                                        )>{role.clone()}</span>
+                                                    </div>
                                                 }
                                                     .into_any()
                                             })}
                                     </div>
-
-                                    // Status indicator
-                                    <div class=format!(
-                                        "w-2 h-2 rounded-full {}",
-                                        if player.is_active.unwrap_or(false) {
-                                            "bg-mint-500"
-                                        } else {
-                                            "bg-gray-400"
-                                        },
-                                    )></div>
                                 </div>
                             }
                                 .into_any()
@@ -512,7 +630,7 @@ fn PlayersPanel(
                 </div>
             </div>
 
-            // Game session info (if active)
+            // Game session info with better styling
             {room_data
                 .current_session
                 .map(|session| {
@@ -523,32 +641,47 @@ fn PlayersPanel(
                         .unwrap_or_else(|| "Unknown".to_string());
                     let status_class = match session.status.as_deref() {
                         Some("active") => {
-                            "bg-mint-100 dark:bg-mint-900 text-mint-800 dark:text-mint-200"
+                            "bg-mint-100 dark:bg-mint-900 text-mint-800 dark:text-mint-200 border-mint-200 dark:border-mint-700"
                         }
                         Some("waiting") => {
-                            "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200"
+                            "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 border-yellow-200 dark:border-yellow-700"
                         }
-                        _ => "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200",
+                        _ => {
+                            "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-600"
+                        }
                     };
                     let current_round = session.current_round;
                     let max_rounds = session.max_rounds;
 
                     view! {
-                        <div>
-                            <h2 class="font-semibold text-gray-800 dark:text-gray-200 mb-3">
-                                "Current Session"
+                        <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 sm:p-4 border-t-4 border-mint-500">
+                            <h2 class="font-semibold text-gray-800 dark:text-gray-200 mb-3 text-base sm:text-lg flex items-center space-x-2">
+                                <svg
+                                    class="w-4 h-4 text-mint-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                                    />
+                                </svg>
+                                <span>"Current Session"</span>
                             </h2>
-                            <div class="space-y-2 text-sm">
-                                <div class="flex justify-between">
+                            <div class="space-y-3 text-sm">
+                                <div class="flex justify-between items-center">
                                     <span class="text-gray-600 dark:text-gray-400">"Type:"</span>
-                                    <span class="text-gray-800 dark:text-gray-200 capitalize">
+                                    <span class="text-gray-800 dark:text-gray-200 capitalize font-medium">
                                         {session_type}
                                     </span>
                                 </div>
-                                <div class="flex justify-between">
+                                <div class="flex justify-between items-center">
                                     <span class="text-gray-600 dark:text-gray-400">"Status:"</span>
                                     <span class=format!(
-                                        "px-2 py-1 text-xs rounded-full {}",
+                                        "px-3 py-1 text-xs rounded-full font-medium border {}",
                                         status_class,
                                     )>{status_text}</span>
                                 </div>
@@ -557,13 +690,31 @@ fn PlayersPanel(
                                         max_rounds
                                             .map(|max_rounds| {
                                                 view! {
-                                                    <div class="flex justify-between">
+                                                    <div class="flex justify-between items-center">
                                                         <span class="text-gray-600 dark:text-gray-400">
                                                             "Round:"
                                                         </span>
-                                                        <span class="text-gray-800 dark:text-gray-200">
-                                                            {round}" / "{max_rounds}
-                                                        </span>
+                                                        <div class="flex items-center space-x-2">
+                                                            <div class="flex space-x-1">
+                                                                {(1..=max_rounds)
+                                                                    .map(|i| {
+                                                                        view! {
+                                                                            <div class=format!(
+                                                                                "w-2 h-2 rounded-full {}",
+                                                                                if i <= round {
+                                                                                    "bg-mint-500"
+                                                                                } else {
+                                                                                    "bg-gray-300 dark:bg-gray-600"
+                                                                                },
+                                                                            )></div>
+                                                                        }
+                                                                    })
+                                                                    .collect::<Vec<_>>()}
+                                                            </div>
+                                                            <span class="text-gray-800 dark:text-gray-200 font-medium text-xs">
+                                                                {round}" / "{max_rounds}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 }
                                             })
