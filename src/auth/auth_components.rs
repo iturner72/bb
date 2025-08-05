@@ -3,11 +3,14 @@ use leptos_router::hooks::use_navigate;
 
 use crate::auth::{context::AuthContext, get_current_user, Logout};
 use crate::components::batch_processor::BatchProcessor;
+use crate::components::dark_mode_toggle::DarkModeToggle;
 use crate::components::embeddings::EmbeddingsProcessor;
 use crate::components::local_embeddings::LocalEmbeddingsProcessor;
 use crate::components::rag_chat::RagChat;
 use crate::components::rss_test::RssTest;
 use crate::components::summary_refresh_processor::SummaryRefreshProcessor;
+use crate::components::theme_selector::ThemeSelector;
+use crate::components::user_avatar::{AvatarSize, UserAvatar};
 
 const ADMIN_EMAIL: &str = "ian96turner@gmail.com";
 
@@ -142,26 +145,24 @@ pub fn ProtectedAdminPanel() -> impl IntoView {
                                                 </span>
                                             </div>
                                             <div class="flex items-center space-x-4">
-                                                {user
-                                                    .avatar_url
-                                                    .as_ref()
-                                                    .map(|avatar| {
-                                                        view! {
-                                                            <img
-                                                                src=avatar.clone()
-                                                                alt="User avatar"
-                                                                class="w-8 h-8 rounded-full"
-                                                            />
-                                                        }
-                                                            .into_any()
-                                                    })}
+                                                <ThemeSelector />
+                                                <DarkModeToggle />
+                                                <UserAvatar
+                                                    avatar_url=user.avatar_url.clone()
+                                                    display_name=user
+                                                        .display_name
+                                                        .clone()
+                                                        .or(user.username.clone())
+                                                    size=AvatarSize::Medium
+                                                />
                                                 <span class="text-gray-700 dark:text-gray-200">
                                                     {user
                                                         .display_name
                                                         .clone()
                                                         .or(user.username.clone())
                                                         .unwrap_or_else(|| "Anonymous".to_string())}
-                                                </span> <LogoutButton />
+                                                </span>
+                                                <LogoutButton />
                                             </div>
                                         </div>
 

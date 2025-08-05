@@ -9,6 +9,7 @@ use crate::components::{
         types::CanvasMessage,
         websocket::{CanvasWebSocket, CanvasWebSocketContext},
     },
+    user_avatar::{UserAvatar, AvatarSize},
 };
 use crate::models::RoomWithPlayersView;
 
@@ -459,18 +460,17 @@ fn PlayersPanel(
                         children=move |player| {
                             view! {
                                 <div class="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-teal-700">
-                                    // Avatar placeholder
-                                    <div class="w-8 h-8 bg-seafoam-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
-                                        {player
+                                    <UserAvatar
+                                        avatar_url=player
                                             .user
                                             .as_ref()
-                                            .and_then(|u| {
-                                                u.display_name.as_ref().or(u.username.as_ref())
-                                            })
-                                            .and_then(|name| name.chars().next())
-                                            .unwrap_or('?')}
-                                    </div>
-
+                                            .and_then(|u| u.avatar_url.clone())
+                                        display_name=player
+                                            .user
+                                            .as_ref()
+                                            .and_then(|u| u.display_name.clone().or(u.username.clone()))
+                                        size=AvatarSize::Medium
+                                    />
                                     <div class="flex-1 min-w-0">
                                         <p class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
                                             {player
