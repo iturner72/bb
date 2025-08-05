@@ -394,8 +394,8 @@ pub fn DrawingRoomPage(
                                             <button
                                                 on:click=move |_| set_show_players_panel(false)
                                                 class="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 
-                                                 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-teal-700 
-                                                 rounded-md transition-colors touch-manipulation"
+                                                dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-teal-700 
+                                                rounded-md transition-colors touch-manipulation"
                                             >
                                                 <svg
                                                     class="w-5 h-5"

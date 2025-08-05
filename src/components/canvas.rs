@@ -9,7 +9,7 @@ use super::canvas_sync::{
 
 cfg_if! {
     if #[cfg(feature = "hydrate")] {
-        use web_sys::{js_sys, CanvasRenderingContext2d};
+        use web_sys::{js_sys, CanvasRenderingContext2d, HtmlCanvasElement};
         use wasm_bindgen::JsCast;
     }
 }
@@ -254,6 +254,61 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
         finish_drawing();
     };
 
+    cfg_if! {
+        if #[cfg(feature = "hydrate")] {
+            fn get_canvas_coordinates(
+                canvas: &HtmlCanvasElement,
+                client_x: f64,
+                client_y: f64,
+            ) -> (f64, f64) {
+                let rect = canvas.get_bounding_client_rect();
+
+                // Get the canvas internal size (actual resolution)
+                let canvas_width = canvas.width() as f64;
+                let canvas_height = canvas.height() as f64;
+
+                // Get the container size (what getBoundingClientRect returns)
+                let container_width = rect.width();
+                let container_height = rect.height();
+
+                // Calculate the actual rendered canvas size within the container
+                // due to object-fit: contain maintaining aspect ratio
+                let canvas_aspect = canvas_width / canvas_height;
+                let container_aspect = container_width / container_height;
+
+                let (rendered_width, rendered_height, offset_x, offset_y) = if canvas_aspect > container_aspect {
+                    // Canvas is wider - letterboxed top/bottom
+                    let rendered_width = container_width;
+                    let rendered_height = container_width / canvas_aspect;
+                    let offset_x = 0.0;
+                    let offset_y = (container_height - rendered_height) / 2.0;
+                    (rendered_width, rendered_height, offset_x, offset_y)
+                } else {
+                    // Canvas is taller - letterboxed left/right
+                    let rendered_width = container_height * canvas_aspect;
+                    let rendered_height = container_height;
+                    let offset_x = (container_width - rendered_width) / 2.0;
+                    let offset_y = 0.0;
+                    (rendered_width, rendered_height, offset_x, offset_y)
+                };
+
+                // Calculate the touch position relative to the canvas element
+                let x = client_x - rect.left();
+                let y = client_y - rect.top();
+
+                // Subtract the letterbox offset to get position within the actual canvas
+                let canvas_relative_x = x - offset_x;
+                let canvas_relative_y = y - offset_y;
+
+                // Scale the coordinates to match the canvas resolution
+                let canvas_x = (canvas_relative_x * canvas_width) / rendered_width;
+                let canvas_y = (canvas_relative_y * canvas_height) / rendered_height;
+
+                (canvas_x, canvas_y)
+            }
+        }
+    }
+
     // Touch event handlers
     let on_touch_start = move |e: web_sys::TouchEvent| {
         e.prevent_default();
@@ -268,9 +323,7 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                 {
                     let touch: web_sys::Touch = touch.dyn_into().unwrap();
                     if let Some(canvas) = canvas_ref.get() {
-                        let rect = canvas.get_bounding_client_rect();
-                        let x = touch.client_x() as f64 - rect.left();
-                        let y = touch.client_y() as f64 - rect.top();
+                        let (x, y) = get_canvas_coordinates(&canvas, touch.client_x() as f64, touch.client_y() as f64);
                         start_drawing(x, y);
                     }
                 }
@@ -291,9 +344,7 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                 {
                     let touch: web_sys::Touch = touch.dyn_into().unwrap();
                     if let Some(canvas) = canvas_ref.get() {
-                        let rect = canvas.get_bounding_client_rect();
-                        let x = touch.client_x() as f64 - rect.left();
-                        let y = touch.client_y() as f64 - rect.top();
+                        let (x, y) = get_canvas_coordinates(&canvas, touch.client_x() as f64, touch.client_y() as f64);
                         continue_drawing(x, y);
                     }
                 }
@@ -485,15 +536,15 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                 </div>
             </div>
 
-            // Canvas area with mobile-optimized sizing and touch handling
+            // Canvas area with mobile-optimized sizing (square on mobile, original aspect ratio on desktop)
             <div class="flex-1 flex items-center justify-center p-1 sm:p-4">
-                <div class="w-full h-full max-w-full max-h-full sm:w-auto sm:h-auto border-2 border-gray-300 dark:border-gray-600 rounded-lg shadow-lg overflow-hidden">
+                <div class="w-full aspect-square sm:w-auto sm:h-auto sm:aspect-auto max-w-full max-h-full border-2 border-gray-300 dark:border-gray-600 rounded-lg shadow-lg overflow-hidden">
                     <canvas
                         node_ref=canvas_ref
                         width="800"
                         height="600"
-                        class="w-full h-full sm:w-auto sm:h-auto bg-gray-100 dark:bg-white cursor-crosshair touch-none select-none"
-                        style="max-width: 100%; max-height: 100%; object-fit: contain;"
+                        class="w-full h-full bg-gray-100 dark:bg-white cursor-crosshair touch-none select-none"
+                        style="display: block; object-fit: contain;"
                         on:mousedown=on_mouse_down
                         on:mousemove=on_mouse_move
                         on:mouseup=on_mouse_up
