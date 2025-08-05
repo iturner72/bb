@@ -11,6 +11,7 @@ use crate::components::rss_test::RssTest;
 use crate::components::summary_refresh_processor::SummaryRefreshProcessor;
 use crate::components::theme_selector::ThemeSelector;
 use crate::components::user_avatar::{AvatarSize, UserAvatar};
+use crate::models::UserView;
 
 const ADMIN_EMAIL: &str = "ian96turner@gmail.com";
 
@@ -132,106 +133,47 @@ pub fn ProtectedAdminPanel() -> impl IntoView {
 
                                 view! {
                                     <div class="min-h-screen bg-gray-100 dark:bg-teal-900">
-                                        <div class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-teal-700">
-                                            <div class="flex items-center space-x-4">
-                                                <a
-                                                    href="/"
-                                                    class="text-3xl text-seafoam-600 dark:text-mint-400 font-bold"
-                                                >
-                                                    "bryptoblogs"
-                                                </a>
-                                                <span class="text-gray-600 dark:text-gray-300">
-                                                    "Admin Panel"
-                                                </span>
-                                            </div>
-                                            <div class="flex items-center space-x-4">
-                                                <ThemeSelector />
-                                                <DarkModeToggle />
-                                                <UserAvatar
-                                                    avatar_url=user.avatar_url.clone()
-                                                    display_name=user
-                                                        .display_name
-                                                        .clone()
-                                                        .or(user.username.clone())
-                                                    size=AvatarSize::Medium
-                                                />
-                                                <span class="text-gray-700 dark:text-gray-200">
-                                                    {user
-                                                        .display_name
-                                                        .clone()
-                                                        .or(user.username.clone())
-                                                        .unwrap_or_else(|| "Anonymous".to_string())}
-                                                </span>
-                                                <LogoutButton />
-                                            </div>
-                                        </div>
+                                        // Use the new mobile-optimized header
+                                        <AdminPanelHeader user=user.clone() />
 
-                                        <div class="container mx-auto p-6">
-                                            <div class="mt-6 bg-white dark:bg-teal-800 rounded-lg shadow-md p-6">
-                                                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
-                                                    "User Information"
-                                                </h3>
-                                                <div class="grid grid-cols-2 gap-4 text-sm">
-                                                    <div>
-                                                        <span class="font-medium text-gray-600 dark:text-gray-400">
-                                                            "Provider:"
-                                                        </span>
-                                                        <span class="ml-2 text-gray-800 dark:text-gray-200">
-                                                            {user.provider}
-                                                        </span>
-                                                    </div>
-                                                    <div>
-                                                        <span class="font-medium text-gray-600 dark:text-gray-400">
-                                                            "Admin Status:"
-                                                        </span>
-                                                        <span class=format!(
-                                                            "ml-2 {}",
-                                                            if is_admin {
-                                                                "text-green-600 dark:text-green-400"
-                                                            } else {
-                                                                "text-red-600 dark:text-red-400"
-                                                            },
-                                                        )>{if is_admin { "Admin" } else { "Regular User" }}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                        <div class="container mx-auto p-4 sm:p-6">
 
                                             // Show admin functions only if user is admin
                                             {if is_admin {
                                                 view! {
-                                                    <div>
-                                                        <div>
-                                                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
+                                                    <div class="space-y-6 sm:space-y-8">
+                                                        <div class="bg-gray-100 dark:bg-teal-900 rounded-lg shadow-lg dark:shadow-teal-highlight p-4 sm:p-6">
+                                                            <h2 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
                                                                 "RAG Chat"
                                                             </h2>
                                                             <RagChat />
                                                         </div>
-                                                        <div>
-                                                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
+                                                        <div class="bg-gray-100 dark:bg-teal-900 rounded-lg shadow-lg dark:shadow-teal-highlight p-4 sm:p-6">
+                                                            <h2 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
                                                                 "RSS Feed Processing"
                                                             </h2>
                                                             <RssTest />
                                                         </div>
-                                                        <div>
-                                                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
+                                                        <div class="bg-gray-100 dark:bg-teal-900 rounded-lg shadow-lg dark:shadow-teal-highlight p-4 sm:p-6">
+                                                            <h2 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
                                                                 "Generate Embeddings"
                                                             </h2>
                                                             <EmbeddingsProcessor />
                                                         </div>
-                                                        <div>
-                                                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
+                                                        <div class="bg-gray-100 dark:bg-teal-900 rounded-lg shadow-lg dark:shadow-teal-highlight p-4 sm:p-6">
+                                                            <h2 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
                                                                 "Generate Local Embeddings"
                                                             </h2>
                                                             <LocalEmbeddingsProcessor />
                                                         </div>
-                                                        <div>
-                                                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
+                                                        <div class="bg-gray-100 dark:bg-teal-900 rounded-lg shadow-lg dark:shadow-teal-highlight p-4 sm:p-6">
+                                                            <h2 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
                                                                 "Backfill Missing Data"
                                                             </h2>
                                                             <BatchProcessor />
                                                         </div>
-                                                        <div>
-                                                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
+                                                        <div class="bg-gray-100 dark:bg-teal-900 rounded-lg shadow-lg dark:shadow-teal-highlight p-4 sm:p-6">
+                                                            <h2 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
                                                                 "Refresh Summaries"
                                                             </h2>
                                                             <SummaryRefreshProcessor />
@@ -241,7 +183,7 @@ pub fn ProtectedAdminPanel() -> impl IntoView {
                                                     .into_any()
                                             } else {
                                                 view! {
-                                                    <div class="mt-6 bg-white dark:bg-teal-800 rounded-lg shadow-md p-6">
+                                                    <div class="mt-6 bg-white dark:bg-teal-800 rounded-lg shadow-md dark:shadow-light-md p-4 sm:p-6">
                                                         <div class="text-center">
                                                             <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
                                                                 "Access Restricted"
@@ -261,17 +203,17 @@ pub fn ProtectedAdminPanel() -> impl IntoView {
                             }
                             Ok(None) => {
                                 view! {
-                                    <div class="min-h-screen bg-gray-100 dark:bg-teal-900 flex items-center justify-center">
+                                    <div class="min-h-screen bg-gray-100 dark:bg-teal-900 flex items-center justify-center p-4">
                                         <div class="text-center">
-                                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
+                                            <h2 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
                                                 "Access Denied"
                                             </h2>
-                                            <p class="text-gray-600 dark:text-gray-400 mb-6">
+                                            <p class="text-gray-600 dark:text-gray-400 mb-6 px-4">
                                                 "You need to log in to access the admin panel."
                                             </p>
                                             <a
                                                 href="/admin"
-                                                class="px-4 py-2 bg-seafoam-600 dark:bg-teal-600 text-white rounded-md hover:bg-seafoam-700 dark:hover:bg-teal-700"
+                                                class="inline-block px-4 py-2 bg-seafoam-600 dark:bg-teal-600 text-white rounded-md hover:bg-seafoam-700 dark:hover:bg-teal-700 transition-colors touch-manipulation"
                                             >
                                                 "Go to Login"
                                             </a>
@@ -282,12 +224,12 @@ pub fn ProtectedAdminPanel() -> impl IntoView {
                             }
                             Err(_) => {
                                 view! {
-                                    <div class="min-h-screen bg-gray-100 dark:bg-teal-900 flex items-center justify-center">
+                                    <div class="min-h-screen bg-gray-100 dark:bg-teal-900 flex items-center justify-center p-4">
                                         <div class="text-center">
-                                            <h2 class="text-2xl font-bold text-salmon-600 mb-4">
+                                            <h2 class="text-xl sm:text-2xl font-bold text-salmon-600 mb-4">
                                                 "Error"
                                             </h2>
-                                            <p class="text-gray-600 dark:text-gray-400">
+                                            <p class="text-gray-600 dark:text-gray-400 px-4">
                                                 "Failed to load user information."
                                             </p>
                                         </div>
@@ -300,4 +242,215 @@ pub fn ProtectedAdminPanel() -> impl IntoView {
             }}
         </Suspense>
     }.into_any()
+}
+
+#[component]
+pub fn AdminPanelHeader(user: UserView) -> impl IntoView {
+    let (is_mobile_menu_open, set_mobile_menu_open) = signal(false);
+
+    view! {
+        <div class="flex justify-between items-center p-2 sm:p-4 border-b border-gray-200 dark:border-teal-700">
+            // Left side - Title and subtitle
+            <div class="flex items-center space-x-2 sm:space-x-4">
+                <a
+                    href="/"
+                    class="text-2xl sm:text-3xl text-seafoam-600 dark:text-mint-400 font-bold truncate"
+                >
+                    "bryptoblogs"
+                </a>
+                <span class="hidden sm:block text-gray-600 dark:text-gray-300">"Admin Panel"</span>
+            </div>
+
+            // Right side - Desktop nav and mobile hamburger
+            <div class="flex items-center">
+                // Desktop navigation (hidden on mobile)
+                <div class="hidden lg:flex lg:items-center lg:space-x-4">
+                    <ThemeSelector />
+                    <DarkModeToggle />
+                    <UserAvatar
+                        avatar_url=user.avatar_url.clone()
+                        display_name=user.display_name.clone().or(user.username.clone())
+                        size=AvatarSize::Medium
+                    />
+                    <span class="text-gray-700 dark:text-gray-200">
+                        {user
+                            .display_name
+                            .clone()
+                            .or(user.username.clone())
+                            .unwrap_or_else(|| "Anonymous".to_string())}
+                    </span>
+                    <LogoutButton />
+                </div>
+
+                // Mobile hamburger button (visible only on mobile)
+                <button
+                    class="lg:hidden flex items-center justify-center w-10 h-10 text-teal-600 dark:text-aqua-400 hover:text-teal-700 dark:hover:text-aqua-300 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-opacity-50 rounded-md touch-manipulation"
+                    on:click=move |_| set_mobile_menu_open.update(|open| *open = !*open)
+                    aria-label="Toggle admin menu"
+                >
+                    // Animated hamburger icon
+                    <div class="w-6 h-6 flex flex-col justify-center items-center">
+                        <span class=move || {
+                            format!(
+                                "block w-5 h-0.5 bg-current transform transition-all duration-300 {}",
+                                if is_mobile_menu_open.get() {
+                                    "rotate-45 translate-y-1"
+                                } else {
+                                    "-translate-y-1"
+                                },
+                            )
+                        }></span>
+                        <span class=move || {
+                            format!(
+                                "block w-5 h-0.5 bg-current transform transition-all duration-300 {}",
+                                if is_mobile_menu_open.get() { "opacity-0" } else { "opacity-100" },
+                            )
+                        }></span>
+                        <span class=move || {
+                            format!(
+                                "block w-5 h-0.5 bg-current transform transition-all duration-300 {}",
+                                if is_mobile_menu_open.get() {
+                                    "-rotate-45 -translate-y-1"
+                                } else {
+                                    "translate-y-1"
+                                },
+                            )
+                        }></span>
+                    </div>
+                </button>
+
+                // Mobile dropdown menu overlay
+                {move || {
+                    if is_mobile_menu_open.get() {
+                        view! {
+                            <div class="lg:hidden">
+                                // Backdrop overlay
+                                <div
+                                    class="fixed inset-0 bg-black bg-opacity-50 z-40"
+                                    on:click=move |_| set_mobile_menu_open.set(false)
+                                ></div>
+
+                                // Mobile menu panel
+                                <div class="fixed top-0 right-0 w-80 h-full bg-gray-100 dark:bg-teal-900 shadow-xl dark:shadow-teal-highlight z-50 transform transition-transform duration-300 ease-in-out">
+                                    // Mobile menu header
+                                    <div class="flex items-center justify-between p-4 border-b border-seafoam-300 dark:border-mint-700">
+                                        <h2 class="text-lg font-semibold text-seafoam-800 dark:text-mint-600">
+                                            "Admin Menu"
+                                        </h2>
+                                        <button
+                                            on:click=move |_| set_mobile_menu_open.set(false)
+                                            class="p-2 text-seafoam-600 dark:text-mint-400 hover:text-seafoam-800 dark:hover:text-mint-300 hover:bg-seafoam-100 dark:hover:bg-teal-700 rounded-md transition-colors touch-manipulation"
+                                            aria-label="Close menu"
+                                        >
+                                            <svg
+                                                class="w-5 h-5"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M6 18L18 6M6 6l12 12"
+                                                />
+                                            </svg>
+                                        </button>
+                                    </div>
+
+                                    // Mobile menu content
+                                    <div class="flex flex-col p-4 space-y-4">
+                                        // User info section
+                                        <div class="flex items-center space-x-3 p-3 bg-white dark:bg-teal-800 rounded-md shadow-md dark:shadow-teal-highlight border-l-4 border-seafoam-500 dark:border-mint-400">
+                                            <UserAvatar
+                                                avatar_url=user.avatar_url.clone()
+                                                display_name=user
+                                                    .display_name
+                                                    .clone()
+                                                    .or(user.username.clone())
+                                                size=AvatarSize::Medium
+                                            />
+                                            <div class="flex flex-col min-w-0">
+                                                <span class="text-seafoam-800 dark:text-mint-600 font-medium truncate">
+                                                    {user
+                                                        .display_name
+                                                        .clone()
+                                                        .or(user.username.clone())
+                                                        .unwrap_or_else(|| "Anonymous".to_string())}
+                                                </span>
+                                                <span class="text-sm text-seafoam-600 dark:text-mint-400">
+                                                    "Administrator"
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        // Navigation links
+                                        <div class="border-t border-seafoam-300 dark:border-mint-700 pt-4">
+                                            <h3 class="text-sm font-semibold text-seafoam-600 dark:text-mint-400 mb-3 uppercase tracking-wide">
+                                                "Navigation"
+                                            </h3>
+                                            <a
+                                                href="/"
+                                                class="flex items-center space-x-3 p-3 text-seafoam-700 dark:text-mint-600 hover:bg-white dark:hover:bg-teal-800 rounded-md transition-colors duration-200 touch-manipulation"
+                                                on:click=move |_| set_mobile_menu_open.set(false)
+                                            >
+                                                <svg
+                                                    class="w-5 h-5"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path
+                                                        stroke-linecap="round"
+                                                        stroke-linejoin="round"
+                                                        stroke-width="2"
+                                                        d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                                                    />
+                                                </svg>
+                                                <span class="font-medium">"Home"</span>
+                                            </a>
+                                        </div>
+
+                                        // Theme controls section
+                                        <div class="border-t border-seafoam-300 dark:border-mint-700 pt-4">
+                                            <h3 class="text-sm font-semibold text-seafoam-600 dark:text-mint-400 mb-3 uppercase tracking-wide">
+                                                "Appearance"
+                                            </h3>
+                                            <div class="space-y-3">
+                                                // Theme selector
+                                                <div class="flex items-center justify-between p-3 hover:bg-white dark:hover:bg-teal-800 rounded-md transition-colors">
+                                                    <span class="text-seafoam-800 dark:text-mint-600 font-medium">
+                                                        "Theme"
+                                                    </span>
+                                                    <ThemeSelector />
+                                                </div>
+
+                                                // Dark mode toggle
+                                                <div class="flex items-center justify-between p-3 hover:bg-white dark:hover:bg-teal-800 rounded-md transition-colors">
+                                                    <span class="text-seafoam-800 dark:text-mint-600 font-medium">
+                                                        "Dark Mode"
+                                                    </span>
+                                                    <DarkModeToggle />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        // Logout section
+                                        <div class="border-t border-seafoam-300 dark:border-mint-700 pt-4 mt-auto">
+                                            <div class="flex justify-center">
+                                                <LogoutButton />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                            .into_any()
+                    } else {
+                        view! { <div></div> }.into_any()
+                    }
+                }}
+            </div>
+        </div>
+    }
 }

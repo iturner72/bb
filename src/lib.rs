@@ -1,3 +1,4 @@
+#![recursion_limit = "512"] // Default is 128
 pub mod app;
 pub mod auth;
 pub mod backfill_service;

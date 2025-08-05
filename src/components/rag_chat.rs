@@ -236,16 +236,16 @@ pub fn RagChat() -> impl IntoView {
     };
 
     view! {
-        <div class="flex flex-col h-[700px] max-w-6xl mx-auto bg-white dark:bg-teal-800 rounded-lg shadow-lg">
+        <div class="flex flex-col h-[500px] sm:h-[700px] max-w-6xl mx-auto bg-gray-200 dark:bg-teal-900 rounded-lg shadow-lg dark:shadow-teal-highlight border-l-4 border-seafoam-500 dark:border-mint-800">
             // Header
-            <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-teal-700">
-                <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border-b border-seafoam-300 dark:border-mint-700 space-y-3 sm:space-y-0">
+                <h2 class="text-lg sm:text-xl font-semibold text-seafoam-800 dark:text-mint-600">
                     "RAG Chat - Ask about blog posts"
                 </h2>
-                <div class="flex items-center space-x-3">
+                <div class="flex flex-wrap items-center gap-2 sm:space-x-3 sm:gap-0">
                     <select
-                        class="px-3 py-1 text-sm rounded-md bg-gray-100 dark:bg-teal-700 
-                        text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-teal-600"
+                        class="px-2 py-1 sm:px-3 text-xs sm:text-sm rounded-md bg-seafoam-100 dark:bg-teal-700 
+                        text-seafoam-800 dark:text-mint-600 border border-seafoam-300 dark:border-mint-600 touch-manipulation"
                         on:change=move |ev| {
                             let value = event_target_value(&ev);
                             let new_type = match value.as_str() {
@@ -260,7 +260,7 @@ pub fn RagChat() -> impl IntoView {
                         <option value="local">"Local Search"</option>
                     </select>
                     <button
-                        class="px-3 py-1 text-sm bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors"
+                        class="px-2 py-1 sm:px-3 text-xs sm:text-sm bg-gray-500 hover:bg-gray-600 active:bg-gray-700 text-white rounded-md transition-colors touch-manipulation"
                         on:click=clear_chat
                     >
                         "Clear Chat"
@@ -271,25 +271,26 @@ pub fn RagChat() -> impl IntoView {
                             .then(|| {
                                 view! {
                                     <button
-                                        class="px-3 py-1 text-sm bg-salmon-500 hover:bg-salmon-600 text-gray-300 rounded-md transition-colors"
+                                        class="px-2 py-1 sm:px-3 text-xs sm:text-sm bg-salmon-500 hover:bg-salmon-600 active:bg-salmon-700 text-white rounded-md transition-colors touch-manipulation"
                                         on:click=move |_| cancel_current_request()
                                     >
                                         "Cancel"
                                     </button>
                                 }
+                                    .into_any()
                             })
                     }}
                 </div>
             </div>
 
             // Messages area
-            <div class="flex-1 overflow-y-auto p-4 space-y-4">
+            <div class="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4 bg-gray-100 dark:bg-teal-800">
                 {move || {
                     if messages.get().is_empty() && !is_loading.get() {
                         view! {
-                            <div class="flex justify-center items-center h-full">
-                                <div class="text-center text-gray-500 dark:text-gray-400">
-                                    <p class="text-lg mb-2">
+                            <div class="flex justify-center items-center h-full px-4">
+                                <div class="text-center text-seafoam-600 dark:text-mint-400">
+                                    <p class="text-base sm:text-lg mb-2">
                                         "Ask me anything about the blog posts!"
                                     </p>
                                     <p class="text-sm">
@@ -321,28 +322,32 @@ pub fn RagChat() -> impl IntoView {
                     {
                         view! {
                             <div class="w-full">
-                                <div class="w-full max-w-none bg-gray-100 dark:bg-teal-700 rounded-lg p-4">
+                                <div class="w-full max-w-none bg-gray-200 dark:bg-teal-900 rounded-lg p-3 sm:p-4 border-l-4 border-aqua-500 dark:border-seafoam-400">
                                     {(!status.is_empty())
                                         .then(|| {
                                             view! {
-                                                <div class="text-sm text-gray-500 dark:text-gray-400 mb-3 italic flex items-center">
-                                                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-500 mr-2"></div>
+                                                <div class="text-xs sm:text-sm text-seafoam-600 dark:text-mint-400 mb-3 italic flex items-center">
+                                                    <div class="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-seafoam-500 mr-2"></div>
                                                     {status}
                                                 </div>
                                             }
+                                                .into_any()
                                         })}
                                     {(!citations.is_empty())
-                                        .then(|| view! { <CitationsList citations=citations /> })}
+                                        .then(|| {
+                                            view! { <CitationsList citations=citations /> }.into_any()
+                                        })}
                                     {(!current.is_empty())
                                         .then(|| {
                                             view! {
-                                                <div class="text-gray-800 dark:text-gray-200 w-full">
+                                                <div class="text-seafoam-800 dark:text-mint-600 w-full text-sm sm:text-base">
                                                     <MarkdownRenderer content=current class="" />
                                                     <span class="animate-pulse text-seafoam-600 dark:text-seafoam-400">
                                                         "|"
                                                     </span>
                                                 </div>
                                             }
+                                                .into_any()
                                         })}
                                 </div>
                             </div>
@@ -355,25 +360,25 @@ pub fn RagChat() -> impl IntoView {
             </div>
 
             // Input area
-            <div class="p-4 border-t border-gray-200 dark:border-teal-700">
-                <div class="flex space-x-3">
+            <div class="p-3 sm:p-4 border-t border-seafoam-300 dark:border-mint-700 bg-gray-200 dark:bg-teal-900">
+                <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
                     <textarea
-                        class="flex-1 p-3 border border-gray-300 dark:border-teal-600 rounded-lg 
-                        bg-white dark:bg-teal-700 text-gray-800 dark:text-gray-200
+                        class="flex-1 p-2 sm:p-3 border border-seafoam-300 dark:border-mint-600 rounded-lg 
+                        bg-seafoam-50 dark:bg-teal-700 text-seafoam-800 dark:text-mint-600
                         focus:outline-none focus:ring-2 focus:ring-seafoam-500 dark:focus:ring-aqua-400
-                        resize-none placeholder-gray-400 dark:placeholder-gray-500"
+                        resize-none placeholder-seafoam-400 dark:placeholder-mint-500 text-sm sm:text-base touch-manipulation"
                         placeholder="Ask a question about the blog posts... (Press Enter to send, Shift+Enter for new line)"
-                        rows="3"
+                        rows="2"
                         prop:value=current_input
                         on:input=move |ev| set_current_input(event_target_value(&ev))
                         on:keydown=handle_key_press
                         prop:disabled=is_loading
                     ></textarea>
                     <button
-                        class="px-6 py-2 bg-seafoam-600 dark:bg-seafoam-500 text-white rounded-lg
-                        hover:bg-seafoam-700 dark:hover:bg-seafoam-600 transition-colors
+                        class="px-4 py-2 sm:px-6 bg-seafoam-600 dark:bg-seafoam-500 text-white rounded-lg
+                        hover:bg-seafoam-700 dark:hover:bg-seafoam-600 active:bg-seafoam-800 dark:active:bg-seafoam-700 transition-colors
                         disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed
-                        flex items-center justify-center min-w-[80px]"
+                        flex items-center justify-center min-w-[80px] sm:min-w-[80px] touch-manipulation text-sm sm:text-base"
                         on:click=move |_| send_message()
                         prop:disabled=move || {
                             is_loading.get() || current_input.get().trim().is_empty()
@@ -382,7 +387,7 @@ pub fn RagChat() -> impl IntoView {
                         {move || {
                             if is_loading.get() {
                                 view! {
-                                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                    <div class="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-white"></div>
                                 }
                                     .into_any()
                             } else {
@@ -393,7 +398,7 @@ pub fn RagChat() -> impl IntoView {
                 </div>
             </div>
         </div>
-    }
+    }.into_any()
 }
 
 #[component]
@@ -401,35 +406,23 @@ fn MessageBubble(message: RagMessage) -> impl IntoView {
     let is_user = message.role == "user";
     
     view! {
-        <div class="w-full">
+        <div class=format!("flex {}", if is_user { "justify-end" } else { "justify-start" })>
             <div class=format!(
-                "w-full rounded-lg p-4 {}",
+                "max-w-4xl rounded-lg p-4 border-l-4 {}",
                 if is_user {
-                    "bg-seafoam-600 dark:bg-seafoam-500 text-white ml-auto max-w-4xl"
+                    "bg-seafoam-200 dark:bg-mint-900/30 text-seafoam-900 dark:text-mint-700 border-seafoam-500 dark:border-mint-400"
                 } else {
-                    "bg-gray-100 dark:bg-teal-700 text-gray-800 dark:text-gray-200 max-w-none"
+                    "bg-gray-200 dark:bg-teal-900 text-seafoam-800 dark:text-mint-600 border-aqua-500 dark:border-seafoam-400"
                 },
             )>
-                {move || {
-                    if is_user {
-                        view! {
-                            <div class="whitespace-pre-wrap text-left">
-                                {message.content.clone()}
-                            </div>
-                        }
-                            .into_any()
-                    } else {
-                        view! {
-                            <div class="w-full text-left">
-                                <MarkdownRenderer content=message.content.clone() class="" />
-                            </div>
-                        }
-                            .into_any()
-                    }
-                }}
+                <div class=format!(
+                    "whitespace-pre-wrap {}",
+                    if is_user { "" } else { "prose prose-sm dark:prose-invert max-w-none" },
+                )>{message.content}</div>
+
                 {message.citations.map(|citations| view! { <CitationsList citations=citations /> })}
 
-                <div class="text-xs opacity-70 mt-2 text-left">
+                <div class="text-xs opacity-70 mt-2 text-seafoam-600 dark:text-mint-400">
                     {format_timestamp(&message.timestamp)}
                 </div>
             </div>
@@ -440,8 +433,8 @@ fn MessageBubble(message: RagMessage) -> impl IntoView {
 #[component]
 fn CitationsList(citations: Vec<Citation>) -> impl IntoView {
     view! {
-        <div class="mt-4 pt-3 border-t border-gray-300 dark:border-teal-600">
-            <div class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3 text-left">
+        <div class="mt-4 pt-3 border-t border-seafoam-300 dark:border-mint-600">
+            <div class="text-sm font-medium text-seafoam-600 dark:text-mint-400 mb-3">
                 {format!("Sources ({}):", citations.len())}
             </div>
             <div class="grid gap-2 max-h-48 overflow-y-auto">
@@ -450,24 +443,21 @@ fn CitationsList(citations: Vec<Citation>) -> impl IntoView {
                     key=|citation| citation.link.clone()
                     children=move |citation| {
                         view! {
-                            <div class="text-xs bg-white dark:bg-teal-800 rounded-md p-3 border border-gray-200 dark:border-teal-600 hover:border-seafoam-400 dark:hover:border-seafoam-500 transition-colors text-left">
+                            <div class="p-3 bg-seafoam-100 dark:bg-teal-700 rounded border-l-4 border-seafoam-400 dark:border-mint-500">
                                 <a
                                     href=citation.link.clone()
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    class="font-medium text-seafoam-600 dark:text-seafoam-400 hover:underline block mb-1"
+                                    class="text-sm font-medium text-seafoam-700 dark:text-mint-400 hover:text-seafoam-800 dark:hover:text-mint-300 underline"
                                 >
                                     {citation.title}
                                 </a>
-                                <div class="text-gray-500 dark:text-gray-400 flex justify-between items-center">
-                                    <span>
-                                        {format!(
-                                            "{} • {}",
-                                            citation.company,
-                                            citation.published_at,
-                                        )}
-                                    </span>
-                                    <span class="text-xs bg-gray-100 dark:bg-teal-700 px-2 py-0.5 rounded">
+                                <div class="text-xs text-seafoam-600 dark:text-mint-500 mt-1">
+                                    {citation.company} " • " {citation.published_at}
+                                </div>
+                                <div class="text-xs text-seafoam-500 dark:text-mint-600 mt-2">
+                                    "Relevance: "
+                                    <span class="font-medium">
                                         {format!("{:.1}%", citation.relevance_score * 100.0)}
                                     </span>
                                 </div>

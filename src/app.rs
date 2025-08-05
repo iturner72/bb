@@ -62,27 +62,31 @@ pub fn App() -> impl IntoView {
 #[component]
 fn HomePage() -> impl IntoView {
     view! {
-        <div class="w-full mx-auto pl-2 bg-gray-100 dark:bg-teal-900">
-            <div class="flex justify-between items-center">
+        <div class="w-full mx-auto bg-gray-100 dark:bg-teal-900">
+            // header
+            <div class="flex justify-between items-center px-2 sm:px-4">
                 <a
-
                     href="/"
-                    class="text-3xl text-left text-seafoam-600 dark:text-mint-400 ib pl-4 p-4 font-bold"
+                    class="text-2xl sm:text-3xl text-left text-seafoam-600 dark:text-mint-400 ib py-4 px-2 sm:px-4 font-bold truncate"
                 >
                     "bryptoblogs"
                 </a>
                 <AuthNav />
             </div>
 
-            <div class="container mx-auto p-4 flex justify-center">
+            <div class="container mx-auto px-4 pb-4 flex justify-center">
                 <a
                     href="/rooms"
-                    class="bg-seafoam-500 hover:bg-seafoam-600 text-white font-bold py-2 px-4 rounded transition-colors"
+                    class="bg-seafoam-500 hover:bg-seafoam-600 text-white font-bold py-2 px-4 sm:py-3 sm:px-6 rounded transition-colors text-sm sm:text-base touch-manipulation active:bg-seafoam-700"
                 >
                     "drawing rooms"
                 </a>
             </div>
-            <Poasts />
+
+            <div class="px-2 sm:px-0">
+                <Poasts />
+            </div>
+
             <Footer />
         </div>
     }

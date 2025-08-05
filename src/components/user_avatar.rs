@@ -71,5 +71,5 @@ pub fn UserAvatar(
                     .into_any()
             }}
         </div>
-    }
+    }.into_any()
 }

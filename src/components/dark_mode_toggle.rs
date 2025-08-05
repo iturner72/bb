@@ -79,7 +79,7 @@ pub fn DarkModeToggle() -> impl IntoView {
         <button on:click=toggle_dark_mode>
             {move || if is_dark.get() { "🌞" } else { "🌙" }}
         </button>
-    }
+    }.into_any()
 }
 
 fn apply_dark_mode(is_dark: bool) {

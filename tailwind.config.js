@@ -121,7 +121,14 @@ module.exports = {
         '108': '26rem',
         '128': '32rem',
         '172': '64rem',
-      }
+      },
+    boxShadow: {
+      'seafoam-light': '0 4px 6px -1px rgba(134, 239, 172, 0.08), 0 2px 4px -2px rgba(134, 239, 172, 0.08)',
+      'mint-glow': '0 4px 6px -1px rgba(167, 243, 208, 0.12), 0 2px 4px -2px rgba(167, 243, 208, 0.1)',
+      'aqua-soft': '0 4px 6px -1px rgba(103, 232, 249, 0.1), 0 2px 4px -2px rgba(103, 232, 249, 0.08)',
+      'teal-highlight': '0 6px 8px -2px rgba(20, 184, 166, 0.15), 0 2px 4px -1px rgba(20, 184, 166, 0.1)',
+      'white-ethereal': '0 4px 6px -1px rgba(255, 255, 255, 0.06), 0 2px 4px -2px rgba(255, 255, 255, 0.04)'
+    }
     },
   },
   plugins: [],
