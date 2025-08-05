@@ -84,7 +84,7 @@ pub fn DrawingRoomPage(
                     protocol,
                     web_sys::window().unwrap().location().host().unwrap(),
                     _room_uuid,
-                    1 // TODO: need actual user_id from auth context
+                    3 // TODO: need actual user_id from auth context
                 );
 
                 match web_sys::WebSocket::new(&ws_url) {
@@ -350,7 +350,7 @@ pub fn DrawingRoomPage(
                                 <div class="w-80 bg-white dark:bg-teal-800 border-l border-gray-200 dark:border-teal-700 p-4 overflow-y-auto">
                                     <PlayersPanel
                                         room_data=room_data
-                                        room_id=room_id 
+                                        room_id=room_id
                                         on_leave=Callback::new(handle_leave_room)
                                         pending=leave_room_action.pending()
                                     />
@@ -412,7 +412,7 @@ fn PlayersPanel(
             <div class="border-t border-gray-200 dark:border-teal-700 pt-4">
                 <button
                     on:click=handle_leave_room
-                    disabled=move || pending.get() 
+                    disabled=move || pending.get()
                     class="w-full px-4 py-2 bg-salmon-600 hover:bg-salmon-700 disabled:bg-salmon-400 
                     disabled:cursor-not-allowed text-white font-medium rounded-md 
                     transition-colors flex items-center justify-center space-x-2"

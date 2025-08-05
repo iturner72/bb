@@ -293,6 +293,37 @@ cfg_if! {
                     current_session,
                 })
             }
+
+            /// delete a room if the user is authorized (creator/host)
+            /// returns the number of deleted rows (should be 1 if successful)
+            pub async fn delete_room_with_auth_check(
+                room_id: Uuid,
+                user_id: i32,
+                conn: &mut AsyncPgConnection
+            ) -> Result<usize, RoomDeleteError> {
+                use diesel::prelude::*;
+                use diesel_async::RunQueryDsl;
+                use crate::schema::canvas_rooms;
+
+                let room: CanvasRoom = canvas_rooms::table
+                    .find(room_id)
+                    .first(conn)
+                    .await
+                    .map_err(|e| match e {
+                        diesel::result::Error::NotFound => RoomDeleteError::RoomNotFound,
+                        _ => RoomDeleteError::Database(e),
+                    })?;
+
+                if room.created_by != Some(user_id) {
+                    return Err(RoomDeleteError::Unauthorized);
+                }
+
+                // delete room - CASCADE handles related records
+                diesel::delete(canvas_rooms::table.find(room_id))
+                    .execute(conn)
+                    .await
+                    .map_err(RoomDeleteError::Database)
+            }
         }
 
         impl GameSession {
@@ -401,12 +432,31 @@ cfg_if! {
         impl From<CreateSessionView> for NewGameSession {
             fn from(view: CreateSessionView) -> Self {
                 NewGameSession {
-                    room_id: Uuid::new_v4(), // This will be set when creating
+                    room_id: Uuid::new_v4(), // this will be set when creating
                     session_type: view.session_type,
                     max_rounds: view.max_rounds,
                     round_time_limit: view.round_time_limit,
                 }
             }
         }
+
+        #[derive(Debug)]
+        pub enum RoomDeleteError {
+            Database(diesel::result::Error),
+            RoomNotFound,
+            Unauthorized,
+        }
+        
+        impl std::fmt::Display for RoomDeleteError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    RoomDeleteError::Database(e) => write!(f, "Database error: {e}"),
+                    RoomDeleteError::RoomNotFound => write!(f, "Room not found"),
+                    RoomDeleteError::Unauthorized => write!(f, "Only the host can delete this room"),
+                }
+            }
+        }
+        
+        impl std::error::Error for RoomDeleteError {}
     }
 }

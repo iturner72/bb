@@ -2,23 +2,21 @@ pub mod game;
 pub mod rooms;
 pub mod users;
 
-pub use users::{UserView, CreateUserView, UpdateUserPreferencesView};
-pub use rooms::{
-    CanvasRoomView, CreateRoomView, JoinRoomView,
-    RoomPlayerView, RoomWithPlayersView,
-    GameSessionView, CreateSessionView
-};
 pub use game::{
-    GameTeamView, CreateTeamView, TeamPlayerView,
-    UserGameStatsView, SavedCanvasView, CreateCanvasView,
-    CanvasGalleryView
+    CanvasGalleryView, CreateCanvasView, CreateTeamView, GameTeamView, SavedCanvasView,
+    TeamPlayerView, UserGameStatsView,
 };
+pub use rooms::{
+    CanvasRoomView, CreateRoomView, CreateSessionView, GameSessionView, JoinRoomView,
+    RoomPlayerView, RoomWithPlayersView,
+};
+pub use users::{CreateUserView, UpdateUserPreferencesView, UserView};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "ssr")] {
         pub use users::{User, NewUser, UpdateUserPreferences};
         pub use rooms::{
-            CanvasRoom, NewCanvasRoom,
+            CanvasRoom, NewCanvasRoom, RoomDeleteError,
             RoomPlayer, NewRoomPlayer,
             GameSession, NewGameSession
         };

@@ -51,7 +51,8 @@ pub async fn create_drawing_room(room_data: CreateRoomView) -> Result<CanvasRoom
         }
     }
 
-    let user_id = 1;
+    // TODO: get from auth context
+    let user_id = 3;
 
     let app_state = use_context::<AppState>()
         .expect("Failed to get AppState from context");
@@ -194,7 +195,7 @@ pub async fn join_room(join_data: JoinRoomView) -> Result<RoomWithPlayersView, S
         }
     }
 
-    let user_id = 1; // TODO: get from auth context
+    let user_id = 3; // TODO: get from auth context
 
     let app_state = use_context::<AppState>()
         .expect("Failed to get AppState from context");
@@ -328,7 +329,7 @@ pub async fn leave_room(room_id: Uuid) -> Result<(), ServerFnError> {
         }
     }
 
-    let user_id = 1; // TODO: Get from auth context
+    let user_id = 3; // TODO: Get from auth context
 
     let app_state = use_context::<AppState>()
         .expect("Failed to get AppState from context");
@@ -341,6 +342,55 @@ pub async fn leave_room(room_id: Uuid) -> Result<(), ServerFnError> {
     RoomPlayer::leave_room(user_id, room_id, &mut conn)
         .await
         .map_err(LeaveError::Database)?;
+
+    Ok(())
+}
+
+#[server(
+    name = DeleteRoom,
+    prefix = "/api",
+    endpoint = "delete_room",
+    input = PostUrl
+)]
+pub async fn delete_room(room_id: Uuid) -> Result<(), ServerFnError> {
+    use std::fmt;
+    use crate::state::AppState;
+    use crate::models::{CanvasRoom, RoomDeleteError};
+
+    #[derive(Debug)]
+    enum DeleteError {
+        Pool(String),
+        Room(RoomDeleteError),
+    }
+
+    impl fmt::Display for DeleteError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                DeleteError::Pool(e) => write!(f, "Pool error: {e}"),
+                DeleteError::Room(e) => write!(f, "{e}"),
+            }
+        }
+    }
+
+    impl From<DeleteError> for ServerFnError {
+        fn from(error: DeleteError) -> Self {
+            ServerFnError::ServerError(error.to_string())
+        }
+    }
+
+    let user_id = 3;
+
+    let app_state = use_context::<AppState>()
+        .expect("Failed to get AppState from context");
+
+    let mut conn = app_state.pool
+        .get()
+        .await
+        .map_err(|e| DeleteError::Pool(e.to_string()))?;
+
+    CanvasRoom::delete_room_with_auth_check(room_id, user_id, &mut conn)
+        .await
+        .map_err(DeleteError::Room)?;
 
     Ok(())
 }

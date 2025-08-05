@@ -196,6 +196,9 @@ pub fn RoomBrowser() -> impl IntoView {
                                                                         };
                                                                         join_action_for_card.dispatch(join_room_request);
                                                                     })
+                                                                    on_delete=Callback::new(move |_room_id: uuid::Uuid| {
+                                                                        refresh_rooms();
+                                                                    })
                                                                 />
                                                             }
                                                                 .into_any()
@@ -411,15 +414,35 @@ fn CreateRoomForm(
 fn RoomCard(
     room_item: RoomListItem,
     #[prop(into)] on_join: Callback<uuid::Uuid>,
+    #[prop(into)] on_delete: Callback<uuid::Uuid>,
 ) -> impl IntoView 
 {
     let room = room_item.room;
     let can_join = room_item.can_join;
+    let current_user_id = 3;
+    let is_host = room.created_by == Some(current_user_id);
+
+    let delete_room_action = ServerAction::<DeleteRoom>::new();
+
+    // handle delete action completion
+    Effect::new({
+        let on_delete = on_delete;
+        let room_id = room.id;
+        move |_| {
+            if let Some(Ok(())) = delete_room_action.value().get() {
+                on_delete.run(room_id);
+            }
+        }
+    });
+
+    let handle_delete = move |_| {
+        delete_room_action.dispatch(DeleteRoom { room_id: room.id });
+    };
 
     view! {
         <div class="border border-gray-200 dark:border-teal-600 rounded-lg p-4 hover:shadow-md transition-shadow">
             <div class="flex justify-between items-start mb-3">
-                <div>
+                <div class="flex-1">
                     <h3 class="font-semibold text-gray-800 dark:text-gray-200 truncate">
                         {room.name.clone()}
                     </h3>
@@ -427,14 +450,28 @@ fn RoomCard(
                         "Code: "{room.room_code.clone()}
                     </p>
                 </div>
-                <div class=format!(
-                    "px-2 py-1 text-xs rounded-full {}",
-                    if can_join {
-                        "bg-mint-100 dark:bg-mint-900 text-mint-800 dark:text-mint-200"
+                <div class="flex items-center space-x-2">
+                    // Host badge
+                    {if is_host {
+                        view! {
+                            <div class="px-2 py-1 text-xs rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200">
+                                "Host"
+                            </div>
+                        }.into_any()
                     } else {
-                        "bg-salmon-100 dark:bg-salmon-900 text-salmon-800 dark:text-salmon-200"
-                    },
-                )>{if can_join { "Open" } else { "Full" }}</div>
+                        view! {}.into_any()
+                    }}
+                    
+                    // Status badge
+                    <div class=format!(
+                        "px-2 py-1 text-xs rounded-full {}",
+                        if can_join {
+                            "bg-mint-100 dark:bg-mint-900 text-mint-800 dark:text-mint-200"
+                        } else {
+                            "bg-salmon-100 dark:bg-salmon-900 text-salmon-800 dark:text-salmon-200"
+                        },
+                    )>{if can_join { "Open" } else { "Full" }}</div>
+                </div>
             </div>
 
             <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
@@ -450,24 +487,69 @@ fn RoomCard(
                 </div>
             </div>
 
-            <button
-                on:click=move |_| {
-                    if can_join {
-                        on_join.run(room.id)
+            // Button row
+            <div class="mt-4 flex space-x-2">
+                // Join button
+                <button
+                    on:click=move |_| {
+                        if can_join {
+                            on_join.run(room.id)
+                        }
                     }
-                }
-                disabled=!can_join
-                class=format!(
-                    "w-full mt-4 px-4 py-2 rounded-md transition-colors {}",
-                    if can_join {
-                        "bg-seafoam-600 hover:bg-seafoam-700 text-white"
-                    } else {
-                        "bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-                    },
-                )
-            >
-                {if can_join { "Join Room" } else { "Room Full" }}
-            </button>
+                    disabled=!can_join
+                    class=format!(
+                        "flex-1 px-4 py-2 rounded-md transition-colors {}",
+                        if can_join {
+                            "bg-seafoam-600 hover:bg-seafoam-700 text-white"
+                        } else {
+                            "bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                        },
+                    )
+                >
+                    {if can_join { "Join Room" } else { "Room Full" }}
+                </button>
+
+                // Delete button (only for hosts)
+                {if is_host {
+                    view! {
+                        <button
+                            on:click=handle_delete
+                            disabled=delete_room_action.pending().get()
+                            class="px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-md transition-colors"
+                            title="Delete Room"
+                        >
+                            {if delete_room_action.pending().get() {
+                                "..."
+                            } else {
+                                "🗑️"
+                            }}
+                        </button>
+                    }.into_any()
+                } else {
+                    view! {}.into_any()
+                }}
+            </div>
+
+            // Error display for delete action
+            {move || {
+                delete_room_action
+                    .value()
+                    .get()
+                    .and_then(|result| {
+                        result
+                            .err()
+                            .map(|e| {
+                                view! {
+                                    <div class="mt-2 p-2 bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-md">
+                                        <p class="text-xs text-red-700 dark:text-red-300">
+                                            "Delete failed: "{e.to_string()}
+                                        </p>
+                                    </div>
+                                }
+                                    .into_any()
+                            })
+                    })
+            }}
         </div>
     }.into_any()
 }
