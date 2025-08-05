@@ -3,8 +3,9 @@ use leptos_router::hooks::use_navigate;
 use uuid::Uuid;
 use std::sync::Arc;
 
-use crate::models::{CanvasRoomView, JoinRoomView};
 use super::drawing_rooms::*;
+use crate::auth::context::AuthContext;
+use crate::models::{CanvasRoomView, JoinRoomView};
 use crate::components::drawing_rooms::CreateDrawingRoom;
 
 #[component]
@@ -15,23 +16,36 @@ pub fn RoomBrowser() -> impl IntoView {
 
     let navigate = use_navigate();
     
-    // Wrap navigate in Arc to make it thread-safe and shareable
+    // wrap navigate in Arc to make it thread-safe and shareable
     let navigate_arc = Arc::new(navigate);
 
-    // Room list resource
+    // get auth context
+    let auth = use_context::<AuthContext>()
+        .expect("AuthContext should be available");
+
+    // room list resource
     let rooms = Resource::new(
-        || (),
-        |_| async move { get_public_rooms().await }
+        move || {
+            // Re-run when auth loading state changes
+            (auth.is_loading.get(), auth.is_authenticated.get())
+        },
+        move |_| async move { 
+            // Only fetch rooms if auth has finished loading
+            if !auth.is_loading.get() {
+                list_rooms().await
+            } else {
+                Ok(vec![]) // Return empty while loading
+            }
+        }
     );
 
     let refresh_rooms = move || {
         rooms.refetch();
     };
 
-    // Use ServerAction instead of Action for proper server function handling
     let join_room_action = ServerAction::<JoinRoom>::new();
 
-    // Clone the Arc for the Effect
+    // clone the Arc for the Effect
     {
         let navigate_for_effect = navigate_arc.clone();
         Effect::new(move |_| {
@@ -45,7 +59,7 @@ pub fn RoomBrowser() -> impl IntoView {
         });
     }
 
-    // Clone Arc for use in view closures
+    // clone Arc for use in view closures
     let navigate_for_create = navigate_arc.clone();
 
     view! {
@@ -419,8 +433,22 @@ fn RoomCard(
 {
     let room = room_item.room;
     let can_join = room_item.can_join;
-    let current_user_id = 3;
-    let is_host = room.created_by == Some(current_user_id);
+
+    let auth = use_context::<AuthContext>()
+        .expect("AuthContext should be available");
+
+    let current_user = auth.current_user.get();
+    let current_user_id = Memo::new(move |_| {
+        if auth.is_loading.get() {
+            None
+        } else {
+            auth.current_user.get().map(|user| user.id)
+        }
+    });
+    
+    let is_host = Memo::new(move |_| {
+        current_user_id.get().is_some() && room.created_by == current_user_id.get()
+    });
 
     let delete_room_action = ServerAction::<DeleteRoom>::new();
 
@@ -435,121 +463,103 @@ fn RoomCard(
         }
     });
 
-    let handle_delete = move |_| {
+    let handle_delete = move |_: web_sys::MouseEvent| {
         delete_room_action.dispatch(DeleteRoom { room_id: room.id });
     };
 
     view! {
-        <div class="border border-gray-200 dark:border-teal-600 rounded-lg p-4 hover:shadow-md transition-shadow">
-            <div class="flex justify-between items-start mb-3">
-                <div class="flex-1">
-                    <h3 class="font-semibold text-gray-800 dark:text-gray-200 truncate">
-                        {room.name.clone()}
+        <div class="bg-white dark:bg-teal-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-teal-600">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-200 mb-1">
+                        {room.name}
                     </h3>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">
-                        "Code: "{room.room_code.clone()}
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        "Room Code: " <span class="font-mono font-bold">{room.room_code}</span>
                     </p>
                 </div>
-                <div class="flex items-center space-x-2">
-                    // Host badge
-                    {if is_host {
+                <div class="flex flex-col items-end">
+                    {move || if is_host.get() {
                         view! {
-                            <div class="px-2 py-1 text-xs rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200">
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-aqua-100 text-aqua-800 dark:bg-aqua-900 dark:text-aqua-200 mb-2">
                                 "Host"
-                            </div>
+                            </span>
                         }.into_any()
                     } else {
-                        view! {}.into_any()
+                        view! { <div></div> }.into_any()
                     }}
-                    
-                    // Status badge
-                    <div class=format!(
-                        "px-2 py-1 text-xs rounded-full {}",
-                        if can_join {
-                            "bg-mint-100 dark:bg-mint-900 text-mint-800 dark:text-mint-200"
+                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                        {room.player_count} " players"
+                        {move || if let Some(max) = room.max_players {
+                            format!(" / {}", max)
                         } else {
-                            "bg-salmon-100 dark:bg-salmon-900 text-salmon-800 dark:text-salmon-200"
-                        },
-                    )>{if can_join { "Open" } else { "Full" }}</div>
-                </div>
-            </div>
-
-            <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                <div class="flex justify-between">
-                    <span>"Players:"</span>
-                    <span>{room.player_count}" / "{room.max_players.unwrap_or(999)}</span>
-                </div>
-                <div class="flex justify-between">
-                    <span>"Mode:"</span>
-                    <span class="capitalize">
-                        {room.game_mode.unwrap_or_else(|| "freeplay".to_string()).replace("_", " ")}
+                            String::new()
+                        }}
                     </span>
                 </div>
             </div>
-
-            // Button row
-            <div class="mt-4 flex space-x-2">
-                // Join button
-                <button
-                    on:click=move |_| {
-                        if can_join {
-                            on_join.run(room.id)
-                        }
-                    }
-                    disabled=!can_join
-                    class=format!(
-                        "flex-1 px-4 py-2 rounded-md transition-colors {}",
-                        if can_join {
-                            "bg-seafoam-600 hover:bg-seafoam-700 text-white"
-                        } else {
-                            "bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-                        },
-                    )
-                >
-                    {if can_join { "Join Room" } else { "Room Full" }}
-                </button>
-
-                // Delete button (only for hosts)
-                {if is_host {
+    
+            <div class="mb-4">
+                {move || if let Some(game_mode) = &room.game_mode {
+                    let game_mode = game_mode.clone();
+                    view! {
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                            "Game Mode: " <span class="font-medium">{game_mode}</span>
+                        </p>
+                    }.into_any()
+                } else {
+                    view! { <div></div> }.into_any()
+                }}
+            </div>
+    
+            <div class="flex gap-2">
+                {move || if can_join {
                     view! {
                         <button
-                            on:click=handle_delete
-                            disabled=delete_room_action.pending().get()
-                            class="px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-md transition-colors"
-                            title="Delete Room"
+                            on:click={
+                                let room_id = room.id;
+                                let on_join = on_join;
+                                move |_: web_sys::MouseEvent| on_join.run(room_id)
+                            }
+                            class="flex-1 bg-seafoam-600 hover:bg-seafoam-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
                         >
-                            {if delete_room_action.pending().get() {
-                                "..."
+                            "Join Room"
+                        </button>
+                    }.into_any()
+                } else {
+                    view! {
+                        <button
+                            disabled
+                            class="flex-1 bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 px-4 py-2 rounded-md text-sm font-medium cursor-not-allowed"
+                        >
+                            "Room Full"
+                        </button>
+                    }.into_any()
+                }}
+    
+                {move || if is_host.get() {
+                    view! {
+                        <button
+                            on:click={
+                                let room_id = room.id;
+                                move |_: web_sys::MouseEvent| {
+                                    delete_room_action.dispatch(DeleteRoom { room_id });
+                                }
+                            }
+                            class="bg-salmon-600 hover:bg-salmon-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                            disabled={move || delete_room_action.pending().get()}
+                        >
+                            {move || if delete_room_action.pending().get() {
+                                "Deleting..."
                             } else {
-                                "🗑️"
+                                "Delete"
                             }}
                         </button>
                     }.into_any()
                 } else {
-                    view! {}.into_any()
+                    view! { <div></div> }.into_any()
                 }}
             </div>
-
-            // Error display for delete action
-            {move || {
-                delete_room_action
-                    .value()
-                    .get()
-                    .and_then(|result| {
-                        result
-                            .err()
-                            .map(|e| {
-                                view! {
-                                    <div class="mt-2 p-2 bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-md">
-                                        <p class="text-xs text-red-700 dark:text-red-300">
-                                            "Delete failed: "{e.to_string()}
-                                        </p>
-                                    </div>
-                                }
-                                    .into_any()
-                            })
-                    })
-            }}
         </div>
-    }.into_any()
+    }
 }

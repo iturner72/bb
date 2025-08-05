@@ -6,7 +6,7 @@ pub mod oauth;
 pub mod secure;
 #[cfg(feature = "ssr")]
 pub mod server;
-mod types;
+pub mod types;
 
 pub use auth_components::*;
 pub use types::*;

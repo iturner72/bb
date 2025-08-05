@@ -13,6 +13,29 @@ pub struct RoomListItem {
     pub can_join: bool,
 }
 
+#[cfg(feature = "ssr")]
+async fn get_authenticated_user_id() -> Result<i32, crate::auth::AuthError> {
+    use axum_extra::extract::cookie::CookieJar;
+    use leptos_axum::extract;
+    use crate::auth::verify_jwt_token;
+    use crate::auth::types::AuthError;
+    
+    let jar = extract::<CookieJar>().await
+        .map_err(|e| AuthError::CookieError(e.to_string()))?;
+    
+    if let Some(cookie) = jar.get("auth_token") {
+        if let Ok(claims) = verify_jwt_token(cookie.value()) {
+            let user_id: i32 = claims.sub.parse()
+                .map_err(|_| AuthError::TokenVerification("Invalid user ID in token".to_string()))?;
+            Ok(user_id)
+        } else {
+            Err(AuthError::TokenVerification("Invalid or expired token".to_string()))
+        }
+    } else {
+        Err(AuthError::TokenVerification("No authentication token found".to_string()))
+    }
+}
+
 #[server(
     name = CreateDrawingRoom,
     prefix = "/api",
@@ -31,7 +54,6 @@ pub async fn create_drawing_room(room_data: CreateRoomView) -> Result<CanvasRoom
     enum RoomError {
         Pool(String),
         Database(diesel::result::Error),
-        #[allow(dead_code)]
         Unauthorized,
     }
 
@@ -51,8 +73,8 @@ pub async fn create_drawing_room(room_data: CreateRoomView) -> Result<CanvasRoom
         }
     }
 
-    // TODO: get from auth context
-    let user_id = 3;
+    let user_id = get_authenticated_user_id().await
+        .map_err(|_| RoomError::Unauthorized)?;
 
     let app_state = use_context::<AppState>()
         .expect("Failed to get AppState from context");
@@ -86,10 +108,7 @@ pub async fn create_drawing_room(room_data: CreateRoomView) -> Result<CanvasRoom
         .await
         .map_err(RoomError::Database)?;
 
-    let mut room_view: CanvasRoomView = created_room.into();
-    room_view.player_count = 1;
-
-    Ok(room_view)
+    Ok(created_room.into())
 }
 
 #[server(
@@ -155,6 +174,92 @@ pub async fn get_public_rooms() -> Result<Vec<RoomListItem>, ServerFnError> {
 }
 
 #[server(
+    prefix = "/api",
+    endpoint = "list_rooms", 
+    input = GetUrl
+)]
+pub async fn list_rooms() -> Result<Vec<RoomListItem>, ServerFnError> {
+    use diesel::prelude::*;
+    use diesel_async::RunQueryDsl;
+    use std::fmt;
+
+    use crate::state::AppState;
+    use crate::schema::{canvas_rooms, room_players};
+    use crate::models::CanvasRoom;
+
+    #[derive(Debug)]
+    enum ListError {
+        Pool(String),
+        Database(diesel::result::Error),
+        Unauthorized,
+    }
+
+    impl fmt::Display for ListError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                ListError::Pool(e) => write!(f, "Pool error: {e}"),
+                ListError::Database(e) => write!(f, "Database error: {e}"),
+                ListError::Unauthorized => write!(f, "Unauthorized"),
+            }
+        }
+    }
+
+    impl From<ListError> for ServerFnError {
+        fn from(error: ListError) -> Self {
+            ServerFnError::ServerError(error.to_string())
+        }
+    }
+
+    // Get authenticated user ID from JWT token
+    let user_id = get_authenticated_user_id().await
+        .map_err(|_| ListError::Unauthorized)?;
+
+    let app_state = use_context::<AppState>()
+        .expect("Failed to get AppState from context");
+
+    let mut conn = app_state.pool
+        .get()
+        .await
+        .map_err(|e| ListError::Pool(e.to_string()))?;
+
+    // Get all public rooms or rooms the user created
+    let rooms: Vec<CanvasRoom> = canvas_rooms::table
+        .filter(
+            canvas_rooms::is_private.eq(Some(false))
+                .or(canvas_rooms::created_by.eq(Some(user_id)))
+        )
+        .order(canvas_rooms::created_at.desc())
+        .load(&mut conn)
+        .await
+        .map_err(ListError::Database)?;
+
+    let mut room_list = Vec::new();
+    
+    for room in rooms {
+        let player_count = room.active_player_count(&mut conn).await.map_err(ListError::Database)?;
+        let is_user_in_room = room.has_active_player(user_id, &mut conn).await.map_err(ListError::Database)?;
+        
+        let can_join = if is_user_in_room {
+            false // already in room
+        } else if let Some(max_players) = room.max_players {
+            player_count < max_players as i64
+        } else {
+            true // no player limit
+        };
+
+        let mut room_view: CanvasRoomView = room.into();
+        room_view.player_count = player_count as usize;
+
+        room_list.push(RoomListItem {
+            room: room_view,
+            can_join,
+        });
+    }
+
+    Ok(room_list)
+}
+
+#[server(
     name = JoinRoom,
     prefix = "/api",
     endpoint = "join_room",
@@ -172,7 +277,6 @@ pub async fn join_room(join_data: JoinRoomView) -> Result<RoomWithPlayersView, S
         RoomNotFound,
         RoomFull,
         AlreadyInRoom,
-        #[allow(dead_code)]
         Unauthorized,
     }
 
@@ -195,7 +299,8 @@ pub async fn join_room(join_data: JoinRoomView) -> Result<RoomWithPlayersView, S
         }
     }
 
-    let user_id = 3; // TODO: get from auth context
+    let user_id = get_authenticated_user_id().await
+        .map_err(|_| JoinError::Unauthorized)?;
 
     let app_state = use_context::<AppState>()
         .expect("Failed to get AppState from context");
@@ -309,7 +414,6 @@ pub async fn leave_room(room_id: Uuid) -> Result<(), ServerFnError> {
     enum LeaveError {
         Pool(String),
         Database(diesel::result::Error),
-        #[allow(dead_code)]
         Unauthorized,
     }
 
@@ -329,7 +433,8 @@ pub async fn leave_room(room_id: Uuid) -> Result<(), ServerFnError> {
         }
     }
 
-    let user_id = 3; // TODO: Get from auth context
+    let user_id = get_authenticated_user_id().await
+        .map_err(|_| LeaveError::Unauthorized)?;
 
     let app_state = use_context::<AppState>()
         .expect("Failed to get AppState from context");
@@ -378,7 +483,8 @@ pub async fn delete_room(room_id: Uuid) -> Result<(), ServerFnError> {
         }
     }
 
-    let user_id = 3;
+    let user_id = get_authenticated_user_id().await
+        .map_err(|_| DeleteError::Room(RoomDeleteError::Unauthorized))?;
 
     let app_state = use_context::<AppState>()
         .expect("Failed to get AppState from context");
