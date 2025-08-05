@@ -425,6 +425,50 @@ fn CreateRoomForm(
 }
 
 #[component]
+pub fn Toast(
+    message: ReadSignal<String>,
+    visible: ReadSignal<bool>,
+    #[prop(into)] on_close: Callback<()>,
+    #[prop(optional, into)] position_class: String,
+) -> impl IntoView {
+    let opacity_class = move || {
+        if visible.get() {
+            "opacity-100"
+        } else {
+            "opacity-0"
+        }
+    };
+    // Use provided position class or default to bottom-right
+    let position = if position_class.is_empty() {
+        "fixed bottom-4 right-4".to_string()
+    } else {
+        position_class
+    };
+    view! {
+        <div class=move || {
+            format!(
+                "{} {} text-xs bg-gray-100 dark:bg-teal-800 text-mint-800 dark:text-mint-600 px-4 py-2 rounded shadow-lg transition-opacity duration-100 z-50",
+                opacity_class(),
+                position,
+            )
+        }>
+            <div class="relative">
+                <button
+                    on:click=move |_| on_close.run(())
+                    class="absolute -top-1 -left-1 text-danger-500 hover:text-danger-600 text-xs leading-none"
+                    title="Close"
+                >
+                    "×"
+                </button>
+                <div class="pl-3">
+                    <span class="text-mint-800 dark:text-mint-600">{message}</span>
+                </div>
+            </div>
+        </div>
+    }.into_any()
+}
+
+#[component]
 fn RoomCard(
     room_item: RoomListItem,
     #[prop(into)] on_join: Callback<uuid::Uuid>,
@@ -452,6 +496,10 @@ fn RoomCard(
 
     let delete_room_action = ServerAction::<DeleteRoom>::new();
 
+    // Toast state for clipboard feedback
+    let (toast_visible, set_toast_visible) = signal(false);
+    let (toast_message, set_toast_message) = signal(String::new());
+
     // handle delete action completion
     Effect::new({
         let on_delete = on_delete;
@@ -467,16 +515,76 @@ fn RoomCard(
         delete_room_action.dispatch(DeleteRoom { room_id: room.id });
     };
 
+    let handle_copy_code = {
+        let room_code = room.room_code.clone();
+        move |_: web_sys::MouseEvent| {
+            let code = room_code.clone();
+            let set_toast_visible = set_toast_visible;
+            let set_toast_message = set_toast_message;
+            
+            wasm_bindgen_futures::spawn_local(async move {
+                if let Some(window) = web_sys::window() {
+                    let navigator = window.navigator();
+                    let clipboard = navigator.clipboard();
+                    let promise = clipboard.write_text(&code);
+                    
+                    match wasm_bindgen_futures::JsFuture::from(promise).await {
+                        Ok(_) => {
+                            set_toast_message.set("Room code copied!".to_string());
+                            set_toast_visible.set(true);
+                            
+                            // auto-hide toast after 2 seconds
+                            set_timeout(
+                                move || set_toast_visible.set(false),
+                                std::time::Duration::from_secs(2)
+                            );
+                        }
+                        Err(_) => {
+                            set_toast_message.set("Failed to copy room code".to_string());
+                            set_toast_visible.set(true);
+                            
+                            // auto-hide error toast after 3 seconds
+                            set_timeout(
+                                move || set_toast_visible.set(false),
+                                std::time::Duration::from_secs(3)
+                            );
+                        }
+                    }
+                }
+            });
+        }
+    };
+
     view! {
-        <div class="bg-white dark:bg-teal-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-teal-600">
+        <div class="bg-white dark:bg-teal-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-teal-600 relative">
             <div class="flex justify-between items-start mb-4">
                 <div>
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-200 mb-1">
                         {room.name}
                     </h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">
-                        "Room Code: " <span class="font-mono font-bold">{room.room_code}</span>
-                    </p>
+                    <div class="flex items-center gap-2 relative">
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                            "Room Code: " <span class="font-mono font-bold">{room.room_code.clone()}</span>
+                        </p>
+                        <div class="relative">
+                            <button
+                                on:click=handle_copy_code
+                                class="p-1 text-xs text-gray-500 hover:text-seafoam-600 dark:text-gray-400 dark:hover:text-aqua-400 transition-colors"
+                                title="Copy room code"
+                            >
+                                "📋"
+                            </button>
+                            
+                            <div class="absolute left-8 top-0 z-50">
+                                <Toast
+                                    message=toast_message
+                                    visible=toast_visible
+                                    on_close=move || set_toast_visible.set(false)
+                                    position_class="relative".to_string()
+                                />
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="flex flex-col items-end">
                     {move || if is_host.get() {
@@ -491,63 +599,52 @@ fn RoomCard(
                     <span class="text-xs text-gray-500 dark:text-gray-400">
                         {room.player_count} " players"
                         {move || if let Some(max) = room.max_players {
-                            format!(" / {}", max)
+                            format!(" / {max}")
                         } else {
                             String::new()
                         }}
                     </span>
                 </div>
             </div>
-    
-            <div class="mb-4">
-                {move || if let Some(game_mode) = &room.game_mode {
-                    let game_mode = game_mode.clone();
-                    view! {
-                        <p class="text-sm text-gray-600 dark:text-gray-400">
-                            "Game Mode: " <span class="font-medium">{game_mode}</span>
-                        </p>
-                    }.into_any()
-                } else {
-                    view! { <div></div> }.into_any()
-                }}
-            </div>
-    
-            <div class="flex gap-2">
-                {move || if can_join {
-                    view! {
-                        <button
-                            on:click={
-                                let room_id = room.id;
-                                let on_join = on_join;
-                                move |_: web_sys::MouseEvent| on_join.run(room_id)
-                            }
-                            class="flex-1 bg-seafoam-600 hover:bg-seafoam-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                        >
-                            "Join Room"
-                        </button>
-                    }.into_any()
-                } else {
-                    view! {
-                        <button
-                            disabled
-                            class="flex-1 bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 px-4 py-2 rounded-md text-sm font-medium cursor-not-allowed"
-                        >
-                            "Room Full"
-                        </button>
-                    }.into_any()
-                }}
-    
+
+            {
+                let game_mode_text = match &room.game_mode {
+                    Some(mode) => format!("Game Mode: {}", mode),
+                    None => "Free Draw".to_string()
+                };
+                view! {
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        {game_mode_text}
+                    </p>
+                }.into_any()
+            }
+
+            <div class="flex justify-between items-center">
+                <div class="flex space-x-2">
+                    {move || if can_join {
+                        view! {
+                            <button
+                                on:click=move |_| on_join.run(room.id)
+                                class="px-3 py-1 bg-seafoam-600 hover:bg-seafoam-700 text-white text-sm rounded transition-colors"
+                            >
+                                "Join Room"
+                            </button>
+                        }.into_any()
+                    } else {
+                        view! {
+                            <span class="px-3 py-1 bg-gray-400 text-white text-sm rounded cursor-not-allowed">
+                                "Room Full"
+                            </span>
+                        }.into_any()
+                    }}
+                </div>
+
                 {move || if is_host.get() {
                     view! {
                         <button
-                            on:click={
-                                let room_id = room.id;
-                                move |_: web_sys::MouseEvent| {
-                                    delete_room_action.dispatch(DeleteRoom { room_id });
-                                }
-                            }
-                            class="bg-salmon-600 hover:bg-salmon-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                            disabled={move || delete_room_action.pending().get()}
+                            on:click=handle_delete
+                            disabled=move || delete_room_action.pending().get()
+                            class="px-3 py-1 bg-salmon-600 hover:bg-salmon-700 text-white text-sm rounded transition-colors disabled:bg-gray-400"
                         >
                             {move || if delete_room_action.pending().get() {
                                 "Deleting..."
@@ -561,5 +658,5 @@ fn RoomCard(
                 }}
             </div>
         </div>
-    }
+    }.into_any()
 }
