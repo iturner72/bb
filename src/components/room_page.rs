@@ -521,7 +521,7 @@ fn PlayersPanel(
                         .status
                         .clone()
                         .unwrap_or_else(|| "Unknown".to_string());
-                    let status_class = match session.status.as_ref().map(|s| s.as_str()) {
+                    let status_class = match session.status.as_deref() {
                         Some("active") => {
                             "bg-mint-100 dark:bg-mint-900 text-mint-800 dark:text-mint-200"
                         }

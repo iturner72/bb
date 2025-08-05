@@ -12,7 +12,9 @@ use crate::components::summary_refresh_processor::SummaryRefreshProcessor;
 const ADMIN_EMAIL: &str = "ian96turner@gmail.com";
 
 fn is_admin_user(user: &crate::models::users::UserView) -> bool {
-    user.email.as_ref().map_or(false, |email| email == ADMIN_EMAIL)
+    user.email
+        .as_ref()
+        .map_or(false, |email| email == ADMIN_EMAIL)
 }
 
 #[component]
@@ -124,7 +126,7 @@ pub fn ProtectedAdminPanel() -> impl IntoView {
                         match user_result {
                             Ok(Some(user)) => {
                                 let is_admin = is_admin_user(&user);
-                                
+
                                 view! {
                                     <div class="min-h-screen bg-gray-100 dark:bg-teal-900">
                                         <div class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-teal-700">
@@ -133,7 +135,7 @@ pub fn ProtectedAdminPanel() -> impl IntoView {
                                                     href="/"
                                                     class="text-3xl text-seafoam-600 dark:text-mint-400 font-bold"
                                                 >
-                                                    "l3chat"
+                                                    "bryptoblogs"
                                                 </a>
                                                 <span class="text-gray-600 dark:text-gray-300">
                                                     "Admin Panel"
@@ -159,8 +161,7 @@ pub fn ProtectedAdminPanel() -> impl IntoView {
                                                         .clone()
                                                         .or(user.username.clone())
                                                         .unwrap_or_else(|| "Anonymous".to_string())}
-                                                </span> 
-                                                <LogoutButton/>
+                                                </span> <LogoutButton />
                                             </div>
                                         </div>
 
@@ -182,9 +183,14 @@ pub fn ProtectedAdminPanel() -> impl IntoView {
                                                         <span class="font-medium text-gray-600 dark:text-gray-400">
                                                             "Admin Status:"
                                                         </span>
-                                                        <span class=format!("ml-2 {}", if is_admin { "text-green-600 dark:text-green-400" } else { "text-red-600 dark:text-red-400" })>
-                                                            {if is_admin { "Admin" } else { "Regular User" }}
-                                                        </span>
+                                                        <span class=format!(
+                                                            "ml-2 {}",
+                                                            if is_admin {
+                                                                "text-green-600 dark:text-green-400"
+                                                            } else {
+                                                                "text-red-600 dark:text-red-400"
+                                                            },
+                                                        )>{if is_admin { "Admin" } else { "Regular User" }}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -230,7 +236,8 @@ pub fn ProtectedAdminPanel() -> impl IntoView {
                                                             <SummaryRefreshProcessor />
                                                         </div>
                                                     </div>
-                                                }.into_any()
+                                                }
+                                                    .into_any()
                                             } else {
                                                 view! {
                                                     <div class="mt-6 bg-white dark:bg-teal-800 rounded-lg shadow-md p-6">
@@ -243,7 +250,8 @@ pub fn ProtectedAdminPanel() -> impl IntoView {
                                                             </p>
                                                         </div>
                                                     </div>
-                                                }.into_any()
+                                                }
+                                                    .into_any()
                                             }}
                                         </div>
                                     </div>

@@ -382,7 +382,7 @@ pub mod oauth_server {
             cookie.to_string().parse().unwrap(),
         );
     
-        (headers, Redirect::to("/admin-panel")).into_response()
+        (headers, Redirect::to("/")).into_response()
     }
 
     async fn upsert_user(
