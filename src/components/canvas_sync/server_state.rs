@@ -123,33 +123,54 @@ cfg_if! {
             }
 
             pub fn export_canvas_data(&self) -> String {
-                // create SVG representation of visible strokes
-                let visible_strokes: Vec<&Stroke> = self.canvas_state.strokes
+                self.canvas_state.strokes
                     .values()
-                    .filter(|stroke| !stroke.deleted)
-                    .collect();
+                    .filter(|stroke| !stroke.deleted && !stroke.points.is_empty())
+                    .fold(
+                        String::from(r#"<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">"#),
+                        |mut svg, stroke| {
+                            svg.push_str(&self.stroke_to_svg_path_pure(stroke));
+                            svg
+                        }
+                    )
+                    + "</svg>"
+            }
 
-                let mut svg = String::from(r#"<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">"#);
+            fn stroke_to_svg_path_pure(&self, stroke: &Stroke) -> String {
+                let path_data = stroke.points
+                    .split_first()
+                    .map(|(first, rest)| match rest.len() {
+                        0 => format!("M{},{} L{},{}", first.x, first.y, first.x + 0.1, first.y + 0.1),
+                        1 => format!("M{},{} L{},{}", first.x, first.y, rest[0].x, rest[0].y),
+                        _ => {
+                            let start = format!("M{},{}", first.x, first.y);
+                            let segments = rest
+                                .iter()
+                                .enumerate()
+                                .map(|(i, point)| {
+                                    if i == rest.len() - 1 {
+                                        // final segment: draw straight line to the last point
+                                        format!(" L{},{}", point.x, point.y)
+                                    } else {
+                                        // create smooth curves using quadratic Bezier curves
+                                        let cp_x = (point.x + rest[i + 1].x) / 2.0;
+                                        let cp_y = (point.y + rest[i + 1].y) / 2.0;
+                                        format!(" Q{},{} {},{}", point.x, point.y, cp_x, cp_y)
+                                    }
+                                })
+                                .collect::<String>();
+                            format!("{}{}", start, segments)
+                        }
+                    })
+                    .unwrap_or_default();
 
-                for stroke in visible_strokes {
-                    if !stroke.points.is_empty() {
-                        let path_data = stroke.points
-                            .windows(2)
-                            .map(|pair| format!("M{},{} L{},{}", pair[0].x, pair[0].y, pair[1].x, pair[1].y))
-                            .collect::<Vec<String>>()
-                            .join(" ");
-
-                        svg.push_str(&format!(
-                            r#"<path d="{} stroke="{} stroke-width="{}" fill="none" stroke-linecap="round"/>"#,
-                            path_data, stroke.color, stroke.brush_size
-                        ));
-                    }
-                }
-
-                svg.push_str("</svg>");
-                svg
+                format!(
+                    r#"<path d="{}" stroke="{}" stroke-width="{}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>"#,
+                    path_data, stroke.color, stroke.brush_size
+                )
             }
         }
+
 
         #[server(
             prefix = "/api",
