@@ -29,6 +29,10 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
     let (user_id, _set_user_id) = signal(generate_user_id());
     let (status_message, set_status_message) = signal(String::new());
 
+    // Signals for touch events
+    let (last_touch_x, set_last_touch_x) = signal(0.0);
+    let (last_touch_y, set_last_touch_y) = signal(0.0);
+
     // OT-specific state
     let canvas_state = RwSignal::new(ClientCanvasState::new(user_id.get()));
     let canvas_ref = NodeRef::<leptos::html::Canvas>::new();
@@ -309,7 +313,7 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
         }
     }
 
-    // Touch event handlers
+    // Touch handlers
     let on_touch_start = move |e: web_sys::TouchEvent| {
         e.prevent_default();
         cfg_if! {
@@ -324,28 +328,57 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                     let touch: web_sys::Touch = touch.dyn_into().unwrap();
                     if let Some(canvas) = canvas_ref.get() {
                         let (x, y) = get_canvas_coordinates(&canvas, touch.client_x() as f64, touch.client_y() as f64);
+                        set_last_touch_x.set(x);
+                        set_last_touch_y.set(y);
                         start_drawing(x, y);
                     }
                 }
             }
         }
     };
-
+    
+    // force interpolated drawing between touch points
     let on_touch_move = move |e: web_sys::TouchEvent| {
         e.prevent_default();
         cfg_if! {
             if #[cfg(feature = "hydrate")] {
-                let touches = e.touches();
-                if let Some(touch) = js_sys::try_iter(&touches)
-                    .unwrap()
-                    .unwrap()
-                    .next()
-                    .and_then(Result::ok)
-                {
-                    let touch: web_sys::Touch = touch.dyn_into().unwrap();
-                    if let Some(canvas) = canvas_ref.get() {
-                        let (x, y) = get_canvas_coordinates(&canvas, touch.client_x() as f64, touch.client_y() as f64);
-                        continue_drawing(x, y);
+                if is_drawing.get() {
+                    let touches = e.touches();
+                    if let Some(touch) = js_sys::try_iter(&touches)
+                        .unwrap()
+                        .unwrap()
+                        .next()
+                        .and_then(Result::ok)
+                    {
+                        let touch: web_sys::Touch = touch.dyn_into().unwrap();
+                        if let Some(canvas) = canvas_ref.get() {
+                            let (x, y) = get_canvas_coordinates(&canvas, touch.client_x() as f64, touch.client_y() as f64);
+                            
+                            // get the last position
+                            let prev_x = last_touch_x.get();
+                            let prev_y = last_touch_y.get();
+                            
+                            // calculate distance
+                            let dx = x - prev_x;
+                            let dy = y - prev_y;
+                            let distance = (dx * dx + dy * dy).sqrt();
+                            
+                            // if the distance is large (due to throttling), interpolate points
+                            if distance > 8.0 {  // adjust this threshold
+                                let steps = (distance / 6.0) as i32; // create intermediate points
+                                for i in 1..=steps {
+                                    let t = i as f64 / steps as f64;
+                                    let interp_x = prev_x + dx * t;
+                                    let interp_y = prev_y + dy * t;
+                                    continue_drawing(interp_x, interp_y);
+                                }
+                            } else {
+                                continue_drawing(x, y);
+                            }
+                            
+                            set_last_touch_x.set(x);
+                            set_last_touch_y.set(y);
+                        }
                     }
                 }
             }
