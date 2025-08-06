@@ -217,11 +217,20 @@ impl ClientCanvasState {
 
     // get visible strokes for rendering
     pub fn get_visible_strokes(&self) -> Vec<&Stroke> {
-        self.canvas_state
-            .strokes
-            .values()
-            .filter(|stroke| !stroke.deleted)
-            .collect()
+        let mut strokes = Vec::new();
+
+        // iterate through operation history to get drawing order
+        for op in &self.canvas_state.operation_history {
+            if let OperationType::DrawStroke { stroke_id, .. } = &op.operation_type {
+                if let Some(stroke) = self.canvas_state.strokes.get(stroke_id) {
+                    if !stroke.deleted {
+                        strokes.push(stroke);
+                    }
+                }
+            }
+        }
+
+        strokes
     }
 
     // Get undoable operations - only DrawStroke operations that resulted in real visible strokes

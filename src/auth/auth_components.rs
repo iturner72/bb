@@ -18,7 +18,7 @@ const ADMIN_EMAIL: &str = "ian96turner@gmail.com";
 fn is_admin_user(user: &crate::models::users::UserView) -> bool {
     user.email
         .as_ref()
-        .map_or(false, |email| email == ADMIN_EMAIL)
+        .is_some_and(|email| email == ADMIN_EMAIL)
 }
 
 #[component]
