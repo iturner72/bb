@@ -17,7 +17,7 @@ cfg_if::cfg_if! {
         pub use users::{User, NewUser, UpdateUserPreferences};
         pub use rooms::{
             CanvasRoom, NewCanvasRoom, RoomDeleteError,
-            RoomPlayer, NewRoomPlayer,
+            RoomPlayer, NewRoomPlayer, KickPlayerError,
             GameSession, NewGameSession
         };
         pub use game::{

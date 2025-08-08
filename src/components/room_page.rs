@@ -2,15 +2,12 @@ use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
 use uuid::Uuid;
 
-use crate::components::{
-    canvas::OTDrawingCanvas,
-    drawing_rooms::{get_room_details, leave_room},
-    canvas_sync::{
+use crate::{components::{
+    canvas::OTDrawingCanvas, canvas_sync::{
         types::CanvasMessage,
         websocket::{CanvasWebSocket, CanvasWebSocketContext},
-    },
-    user_avatar::{UserAvatar, AvatarSize},
-};
+    }, drawing_rooms::{get_room_details, kick_player, leave_room}, user_avatar::{AvatarSize, UserAvatar}
+}, models::RoomPlayerView};
 use crate::models::RoomWithPlayersView;
 
 cfg_if::cfg_if! {
@@ -443,9 +440,18 @@ fn PlayersPanel(
     let players = room_data.players;
     let room = room_data.room;
 
+    let kick_player_action = Action::new(move |(player_id, room_id): &(i32, Uuid)| {
+        let player_id = *player_id;
+        let room_id = *room_id;
+        async move { kick_player(player_id, room_id).await }
+    });
+
     let handle_leave_room = move |_| {
         on_leave.run(());
     };
+
+    let current_user_id = 3; // TODO get from auth context
+    let is_host = room.created_by == Some(current_user_id);
 
     view! {
         <div class="space-y-4 sm:space-y-6 h-full overflow-y-auto">
@@ -526,7 +532,7 @@ fn PlayersPanel(
                 </button>
             </div>
 
-            // Players list with much better design
+            // Players list with kick functionality
             <div class="flex-1">
                 <div class="flex items-center justify-between mb-3 px-1">
                     <h2 class="font-semibold text-gray-800 dark:text-gray-200 text-base sm:text-lg">
@@ -541,6 +547,8 @@ fn PlayersPanel(
                         each=move || players.clone()
                         key=|player| player.id
                         children=move |player| {
+                            let can_kick = is_host && player.user_id != current_user_id;
+
                             view! {
                                 <div class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 
                                 transition-colors duration-200 border border-transparent hover:border-gray-200 
@@ -557,7 +565,7 @@ fn PlayersPanel(
                                                 .and_then(|u| u.display_name.clone().or(u.username.clone()))
                                             size=AvatarSize::Medium
                                         />
-                                        // Larger, more visible status indicator with animation
+                                        // Status indicator
                                         <div class=format!(
                                             "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-gray-800 {}",
                                             if player.is_active.unwrap_or(false) {
@@ -580,6 +588,7 @@ fn PlayersPanel(
                                                     .cloned()
                                                     .unwrap_or_else(|| format!("Player {}", player.user_id))}
                                             </p>
+                                            // Status badge
                                             {if player.is_active.unwrap_or(false) {
                                                 view! {
                                                     <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-mint-100 dark:bg-mint-900 text-mint-800 dark:text-mint-200">
@@ -596,6 +605,7 @@ fn PlayersPanel(
                                                     .into_any()
                                             }}
                                         </div>
+                                        // Role badge
                                         {player
                                             .role
                                             .as_ref()
@@ -622,6 +632,42 @@ fn PlayersPanel(
                                                     .into_any()
                                             })}
                                     </div>
+
+                                    // Kick button (only visible to host for other players)
+                                    {if can_kick {
+                                        let player_id = player.user_id;
+                                        view! {
+                                            <div class="flex-shrink-0">
+                                                <button
+                                                    on:click=move |_| {
+                                                        if let Some(room_id) = room_id.get() {
+                                                            kick_player_action.dispatch((player_id, room_id));
+                                                        }
+                                                    }
+                                                    disabled=move || kick_player_action.pending().get()
+                                                    class="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors duration-200 disabled:opacity-50"
+                                                    title="Kick Player"
+                                                >
+                                                    <svg
+                                                        class="w-4 h-4"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path
+                                                            stroke-linecap="round"
+                                                            stroke-linejoin="round"
+                                                            stroke-width="2"
+                                                            d="M6 18L18 6M6 6l12 12"
+                                                        />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        }
+                                            .into_any()
+                                    } else {
+                                        view! { <div></div> }.into_any()
+                                    }}
                                 </div>
                             }
                                 .into_any()

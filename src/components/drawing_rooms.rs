@@ -184,7 +184,7 @@ pub async fn list_rooms() -> Result<Vec<RoomListItem>, ServerFnError> {
     use std::fmt;
 
     use crate::state::AppState;
-    use crate::schema::{canvas_rooms, room_players};
+    use crate::schema::canvas_rooms;
     use crate::models::CanvasRoom;
 
     #[derive(Debug)]
@@ -497,6 +497,56 @@ pub async fn delete_room(room_id: Uuid) -> Result<(), ServerFnError> {
     CanvasRoom::delete_room_with_auth_check(room_id, user_id, &mut conn)
         .await
         .map_err(DeleteError::Room)?;
+
+    Ok(())
+}
+
+#[server(
+    name = KickPlayer,
+    prefix = "/api",
+    endpoint = "kick_player",
+    input = PostUrl
+)]
+pub async fn kick_player(player_id: i32, room_id: Uuid) -> Result<(), ServerFnError> {
+    use std::fmt;
+    use crate::state::AppState;
+    use crate::models::{CanvasRoom, KickPlayerError};
+
+    #[derive(Debug)]
+    enum KickError {
+        Pool(String),
+        Kick(KickPlayerError),
+    }
+
+    impl fmt::Display for KickError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                KickError::Pool(e) => write!(f, "Pool error: {e}"),
+                KickError::Kick(e) => write!(f, "{e}"),
+            }
+        }
+    }
+
+    impl From<KickError> for ServerFnError {
+        fn from(error: KickError) -> Self {
+            ServerFnError::ServerError(error.to_string())
+        }
+    }
+
+    let host_id = get_authenticated_user_id().await
+        .map_err(|_| KickError::Kick(KickPlayerError::Unauthorized))?;
+
+    let app_state = use_context::<AppState>()
+        .expect("Failed to get AppState from context");
+
+    let mut conn = app_state.pool
+        .get()
+        .await
+        .map_err(|e| KickError::Pool(e.to_string()))?;
+
+    CanvasRoom::kick_player(host_id, player_id, room_id, &mut conn)
+        .await
+        .map_err(KickError::Kick)?;
 
     Ok(())
 }

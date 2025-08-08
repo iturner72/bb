@@ -196,7 +196,7 @@ cfg_if! {
                     user_id,
                     role,
                 };
-            
+
                 diesel::insert_into(room_players::table)
                     .values(&new_player)
                     .returning(room_players::all_columns)
@@ -254,12 +254,12 @@ cfg_if! {
                     ))
                     .load::<(RoomPlayer, Option<i32>, Option<String>, Option<String>, Option<String>)>(conn)
                     .await?;
-            
+
                 let players: Vec<RoomPlayerView> = players_data
                     .into_iter()
                     .map(|(player, user_id, username, display_name, avatar_url)| {
                         let mut player_view: RoomPlayerView = player.into();
-                        
+
                         // If we have a user_id, then we have user data (left join matched)
                         if let Some(id) = user_id {
                             player_view.user = Some(crate::models::users::UserView {
@@ -275,18 +275,18 @@ cfg_if! {
                                 drawing_privacy: None,
                             });
                         }
-            
+
                         player_view
                     })
                     .collect();
-            
+
                 // Get current session
                 let current_session = self.current_session(conn).await?.map(|session| session.into());
-            
+
                 // Create room view with player count - clone self before converting
                 let mut room_view: CanvasRoomView = (*self).clone().into();
                 room_view.player_count = players.len();
-            
+
                 Ok(RoomWithPlayersView {
                     room: room_view,
                     players,
@@ -324,6 +324,40 @@ cfg_if! {
                     .await
                     .map_err(RoomDeleteError::Database)
             }
+
+            pub async fn kick_player(
+                host_id: i32,
+                user_id: i32,
+                room_id: Uuid,
+                conn: &mut AsyncPgConnection
+            ) -> Result<usize, KickPlayerError> {
+
+                let room: CanvasRoom = canvas_rooms::table
+                    .find(room_id)
+                    .first(conn)
+                    .await
+                    .map_err(|e| match e {
+                        diesel::result::Error::NotFound => KickPlayerError::RoomNotFound,
+                        _ => KickPlayerError::Database(e),
+                    })?;
+
+                if room.created_by != Some(host_id) {
+                    return Err(KickPlayerError::Unauthorized);
+                }
+                diesel::update(
+                    room_players::table
+                        .filter(room_players::user_id.eq(user_id))
+                        .filter(room_players::room_id.eq(room_id))
+                )
+                .set((
+                    room_players::is_active.eq(false),
+                    room_players::left_at.eq(chrono::Utc::now().naive_utc()),
+                ))
+                .execute(conn)
+                .await
+                .map_err(KickPlayerError::Database)
+            }
+
         }
 
         impl GameSession {
@@ -356,7 +390,7 @@ cfg_if! {
             pub async fn leave_room(
                 user_id: i32,
                 room_id: Uuid,
-                conn:&mut AsyncPgConnection
+                conn: &mut AsyncPgConnection
             ) -> QueryResult<usize> {
                 diesel::update(
                     room_players::table
@@ -446,7 +480,7 @@ cfg_if! {
             RoomNotFound,
             Unauthorized,
         }
-        
+
         impl std::fmt::Display for RoomDeleteError {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 match self {
@@ -456,7 +490,27 @@ cfg_if! {
                 }
             }
         }
-        
+
+        #[derive(Debug)]
+        pub enum KickPlayerError {
+            Database(diesel::result::Error),
+            RoomNotFound,
+            PlayerNotFound,
+            Unauthorized,
+        }
+
+        impl std::fmt::Display for KickPlayerError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    KickPlayerError::Database(e) => write!(f, "Database error: {e}"),
+                    KickPlayerError::RoomNotFound => write!(f, "Room not found"),
+                    KickPlayerError::PlayerNotFound => write!(f, "Player not found"),
+                    KickPlayerError::Unauthorized => write!(f, "Only the host can kick players"),
+                }
+            }
+        }
+
         impl std::error::Error for RoomDeleteError {}
+        impl std::error::Error for KickPlayerError {}
     }
 }
