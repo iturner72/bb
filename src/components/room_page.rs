@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
 use uuid::Uuid;
 
-use crate::{components::{
+use crate::{auth::context::AuthContext, components::{
     canvas::OTDrawingCanvas, canvas_sync::{
         types::CanvasMessage,
         websocket::{CanvasWebSocket, CanvasWebSocketContext},
@@ -440,6 +440,9 @@ fn PlayersPanel(
     let players = room_data.players;
     let room = room_data.room;
 
+    let auth = use_context::<AuthContext>()
+        .expect("AuthContext should be available");
+
     let kick_player_action = Action::new(move |(player_id, room_id): &(i32, Uuid)| {
         let player_id = *player_id;
         let room_id = *room_id;
@@ -450,8 +453,15 @@ fn PlayersPanel(
         on_leave.run(());
     };
 
-    let current_user_id = 3; // TODO get from auth context
-    let is_host = room.created_by == Some(current_user_id);
+    let current_user_id = move || {
+        auth.current_user.get()
+            .and_then(|user| Some(user.id))
+            .unwrap_or(0)
+    };
+
+    let is_host = move || {
+        room.created_by == Some(current_user_id())
+    };
 
     view! {
         <div class="space-y-4 sm:space-y-6 h-full overflow-y-auto">
@@ -547,7 +557,7 @@ fn PlayersPanel(
                         each=move || players.clone()
                         key=|player| player.id
                         children=move |player| {
-                            let can_kick = is_host && player.user_id != current_user_id;
+                            let can_kick = is_host() && player.user_id != current_user_id();
 
                             view! {
                                 <div class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 
