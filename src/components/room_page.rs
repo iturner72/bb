@@ -77,12 +77,18 @@ pub fn DrawingRoomPage(
                     "ws"
                 };
 
+                let user_id = use_context::<AuthContext>()
+                    .expect("AuthContext should be available")
+                    .current_user.get()
+                    .map(|user| user.id)
+                    .unwrap_or(0);
+
                 let ws_url = format!(
-                    "{}://{}/ws/canvas/{}/{}",
+                    "{}://{}/ws/canvas/{}/{:?}",
                     protocol,
                     web_sys::window().unwrap().location().host().unwrap(),
                     _room_uuid,
-                    3 // TODO: need actual user_id from auth context
+                    user_id,
                 );
 
                 match web_sys::WebSocket::new(&ws_url) {
@@ -455,7 +461,7 @@ fn PlayersPanel(
 
     let current_user_id = move || {
         auth.current_user.get()
-            .and_then(|user| Some(user.id))
+            .map(|user| user.id)
             .unwrap_or(0)
     };
 
