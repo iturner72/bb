@@ -8,7 +8,7 @@ use axum::{
 };
 use futures::{sink::SinkExt, stream::StreamExt};
 use std::collections::HashMap;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Mutex};
 use std::sync::Arc;
 
 use crate::state::AppState;
@@ -108,15 +108,16 @@ async fn handle_canvas_socket(
     client_id: String,
     user_id: i32,
 ) {
-    let (mut sender, mut receiver) = socket.split();
+    let (sender, mut receiver) = socket.split();
     let canvas_manager = state.canvas_manager.clone();
+    let sender = Arc::new(Mutex::new(sender));
 
     // send initial room state
     if let Some(manager) = &canvas_manager {
         if let Some(canvas_state) = manager.get_room_state(room_id.clone()).await {
             let sync_message = CanvasMessage::StateSync(canvas_state);
             if let Ok(json) = serde_json::to_string(&sync_message) {
-                let _ = sender.send(Message::Text(json.into())).await;
+                let _ = sender.lock().await.send(Message::Text(json.into())).await;
             }
         }
     }
@@ -124,25 +125,12 @@ async fn handle_canvas_socket(
     // task for sending messages to this client
     let mut send_task = {
         let mut rx = state.drawing_tx.subscribe();
-        let client_id_clone = client_id.clone();
+        let sender_clone = Arc::clone(&sender); 
 
         tokio::spawn(async move {
             while let Ok(message) = rx.recv().await {
-                // only forawrd messages not from this client
-                if let Ok(canvas_msg) = serde_json::from_str::<CanvasMessage>(&message) {
-                    let should_forward = match &canvas_msg {
-                        CanvasMessage::RemoteOperation(op) => op.client_id != client_id_clone,
-                        CanvasMessage::OperationAck { .. } => true, // always send acks 
-                        _ => true,
-                    };
-
-                    if should_forward {
-                        if let Ok(json) = serde_json::to_string(&canvas_msg) {
-                            if sender.send(Message::Text(json.into())).await.is_err() {
-                                break;
-                            }
-                        }
-                    }
+                if sender_clone.lock().await.send(Message::Text(message.into())).await.is_err() {
+                    break;
                 }
             }
         })
@@ -174,7 +162,10 @@ async fn handle_canvas_socket(
                                             match response_msg {
                                                 ClientResponse::Direct(msg) => {
                                                     if let Ok(json) = serde_json::to_string(&msg) {
-                                                        let _ = tx.send(json);
+                                                        if sender.lock().await.send(Message::Text(json.into())).await.is_err() {
+                                                            log::warn!("failed to send direct message to client {}", client_id_clone);
+                                                            break;
+                                                        }
                                                     }
                                                 }
                                                 ClientResponse::Broadcast(msg) => {
@@ -189,7 +180,7 @@ async fn handle_canvas_socket(
                                         log::error!("Error handling canvas message: {}", e);
                                         let error_msg = CanvasMessage::Error(e);
                                         if let Ok(json) = serde_json::to_string(&error_msg) {
-                                            let _ = tx.send(json); 
+                                            let _ = sender.lock().await.send(Message::Text(json.into())).await; 
                                         }
                                     }
                                 }

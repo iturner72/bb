@@ -46,15 +46,7 @@ cfg_if! {
             let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
             let pool = establish_connection(&database_url).expect("failed to create database pool");
 
-            let app_state = AppState {
-                leptos_options: leptos_options.clone(),
-                pool,
-                sse_state: SseState::new(),
-                oauth_states: Arc::new(dashmap::DashMap::new()),
-                drawing_tx: broadcast::Sender::new(100),
-                user_count: Arc::new(Mutex::new(0)),
-                canvas_manager: Some(CanvasRoomManager::new()),
-            };
+            let app_state = AppState::new(leptos_options.clone(), pool);
 
             async fn server_fn_handler(
                 State(app_state): State<AppState>,
