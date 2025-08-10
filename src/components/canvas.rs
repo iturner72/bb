@@ -51,33 +51,127 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
 
                     // draw all visible strokes
                     canvas_state.update(|client_state| {
-                        let strokes = client_state.get_visible_strokes();
-
-                        for stroke in strokes {
-                            if stroke.points.len() > 1 {
-                                context.begin_path();
-                                context.set_stroke_style_str(&stroke.color);
-                                context.set_line_width(stroke.brush_size as f64);
-                                context.set_line_cap("round");
-                                context.set_line_join("round");
-
-                                // move to first point
-                                let first_point = &stroke.points[0];
-                                context.move_to(first_point.x, first_point.y);
-
-                                // draw lines to subsequent points
-                                for point in stroke.points.iter().skip(1) {
-                                    context.line_to(point.x, point.y);
-                                }
-
-                                context.stroke();
-                            }
-                        }
+                        client_state
+                            .get_visible_strokes()
+                            .iter()
+                            .for_each(|stroke| draw_stroke_smooth(&context, stroke));
                     });
                 }
             }
         }
     };
+
+    // helper for drawing complete smooth strokes
+    #[cfg(feature = "hydrate")]
+    fn draw_stroke_smooth(
+        context: &CanvasRenderingContext2d,
+        stroke: &super::canvas_sync::types::Stroke
+    ) {
+        let path_commands = stroke.points
+            .split_first()
+            .map(|(first, rest)| match rest.len() {
+                0 => vec![
+                    CanvasCommand::MoveTo(first.x, first.y),
+                    CanvasCommand::LineTo(first.x + 0.1, first.y + 0.1), // tiny line for single point
+                ],
+                1 => vec![
+                    CanvasCommand::MoveTo(first.x, first.y),
+                    CanvasCommand::LineTo(rest[0].x, rest[0].y),
+                ],
+                _ => {
+                    let mut commands = vec![CanvasCommand::MoveTo(first.x, first.y)];
+
+                    let curve_commands = rest
+                        .iter()
+                        .enumerate()
+                        .map(|(i, point)| {
+                            if i == rest.len() - 1 {
+                                // final segment: straight line to last point
+                                CanvasCommand::LineTo(point.x, point.y)
+                            } else {
+                                // smooth curve using quadratic bezier
+                                let cp_x = (point.x + rest[i + 1].x) / 2.0;
+                                let cp_y = (point.y + rest[i + 1].y) / 2.0;
+                                CanvasCommand::QuadraticCurveTo(point.x, point.y, cp_x, cp_y)
+                            }
+                        })
+                        .collect::<Vec<_>>();
+
+                    commands.extend(curve_commands);
+                    commands
+                }
+            })
+            .unwrap_or_default();
+
+        // execute path commands
+        context.begin_path();
+        context.set_stroke_style_str(&stroke.color);
+        context.set_line_width(stroke.brush_size as f64);
+        context.set_line_cap("round");
+        context.set_line_join("round");
+
+        path_commands.iter().for_each(|cmd| execute_canvas_command(context, cmd));
+        context.stroke();
+    }
+
+    // helper for drawing incremental smooth segments during drawing
+    #[cfg(feature = "hydrate")]
+    fn draw_stroke_segment_smooth(
+        context: &CanvasRenderingContext2d,
+        current_stroke: &super::canvas_sync::client_state::CurrentStroke
+    ) {
+        let points = &current_stroke.points;
+        let len = points.len();
+
+        if len < 2 { return; }
+
+        context.set_stroke_style_str(&current_stroke.color);
+        context.set_line_width(current_stroke.brush_size as f64);
+        context.set_line_cap("round");
+        context.set_line_join("round");
+
+        match len {
+            2 => {
+                // first segment - straight line
+                context.begin_path();
+                context.move_to(points[0].x, points[0].y);
+                context.line_to(points[1].x, points[1].y);
+                context.stroke();
+            },
+            _ => {
+                // smooth curve for recent segment (last 3 points)
+                let [p1, p2, p3] = [&points[len-3], &points[len-2], &points[len-1]];
+
+                context.begin_path();
+                context.move_to(p1.x, p1.y);
+
+                let end_x = (p2.x + p3.x) / 2.0;
+                let end_y = (p2.y + p3.y) / 2.0;
+
+                context.quadratic_curve_to(p2.x, p2.y, end_x, end_y);
+                context.stroke();
+            }
+        }
+    }
+
+    // canvas command type
+    #[cfg(feature = "hydrate")]
+    enum CanvasCommand {
+        MoveTo(f64, f64),
+        LineTo(f64, f64),
+        QuadraticCurveTo(f64, f64, f64, f64), // control_x, control_y, end_x, end_y
+    }
+
+    #[cfg(feature = "hydrate")]
+    fn execute_canvas_command(context: &CanvasRenderingContext2d, command: &CanvasCommand) {
+        match command {
+            CanvasCommand::MoveTo(x, y) => context.move_to(*x, *y),
+            CanvasCommand::LineTo(x, y) => context.line_to(*x, *y),
+            CanvasCommand::QuadraticCurveTo(cp_x, cp_y, end_x, end_y) => {
+                context.quadratic_curve_to(*cp_x, *cp_y, *end_x, *end_y);
+            }
+        }
+    }
 
     // Canvas message handler
     let handle_canvas_message = move |message: CanvasMessage| {
@@ -149,15 +243,7 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
 
                     canvas_state.update(|client_state| {
                         if let Some(ref current_stroke) = client_state.current_stroke {
-                            if let Some(last_point) = current_stroke.points.last() {
-                                context.begin_path();
-                                context.move_to(last_point.x, last_point.y);
-                                context.line_to(_x, _y);
-                                context.set_line_cap("round");
-                                context.set_line_width(current_stroke.brush_size as f64);
-                                context.set_stroke_style_str(&current_stroke.color);
-                                context.stroke();
-                            }
+                            draw_stroke_segment_smooth(&context, current_stroke);
                         }
                     });
                 }
@@ -423,12 +509,15 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
         if ev.ctrl_key() || ev.meta_key() {
             match ev.key().as_str() {
                 "z" => {
-                    undo(web_sys::MouseEvent::new("click").unwrap());
-                    ev.prevent_default();
-                }
-                "y" => {
-                    redo(web_sys::MouseEvent::new("click").unwrap());
-                    ev.prevent_default();
+                    if ev.shift_key() {
+                        // ctrl+shift+z for redo
+                        redo(web_sys::MouseEvent::new("click").unwrap());
+                        ev.prevent_default();
+                    } else {
+                        // ctrl+z for undo
+                        undo(web_sys::MouseEvent::new("click").unwrap());
+                        ev.prevent_default();
+                    }
                 }
                 "s" => {
                     save_canvas(web_sys::MouseEvent::new("click").unwrap());
@@ -620,10 +709,10 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                         disabled=move || {
                             canvas_state.with(|canvas_state| { !canvas_state.can_redo() })
                         }
-                        title="Redo last undone action (⌘Y)"
+                        title="Redo last undone action (⌘⇧Z)"
                     >
                         <span class="sm:hidden">"Redo"</span>
-                        <span class="hidden sm:inline">"Redo (⌘Y)"</span>
+                        <span class="hidden sm:inline">"Redo (⌘⇧Z)"</span>
                     </button>
 
                     <button
