@@ -65,9 +65,10 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
     #[cfg(feature = "hydrate")]
     fn draw_stroke_smooth(
         context: &CanvasRenderingContext2d,
-        stroke: &super::canvas_sync::types::Stroke
+        stroke: &super::canvas_sync::types::Stroke,
     ) {
-        let path_commands = stroke.points
+        let path_commands = stroke
+            .points
             .split_first()
             .map(|(first, rest)| match rest.len() {
                 0 => vec![
@@ -110,7 +111,9 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
         context.set_line_cap("round");
         context.set_line_join("round");
 
-        path_commands.iter().for_each(|cmd| execute_canvas_command(context, cmd));
+        path_commands
+            .iter()
+            .for_each(|cmd| execute_canvas_command(context, cmd));
         context.stroke();
     }
 
@@ -118,12 +121,14 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
     #[cfg(feature = "hydrate")]
     fn draw_stroke_segment_smooth(
         context: &CanvasRenderingContext2d,
-        current_stroke: &super::canvas_sync::client_state::CurrentStroke
+        current_stroke: &super::canvas_sync::client_state::CurrentStroke,
     ) {
         let points = &current_stroke.points;
         let len = points.len();
 
-        if len < 2 { return; }
+        if len < 2 {
+            return;
+        }
 
         context.set_stroke_style_str(&current_stroke.color);
         context.set_line_width(current_stroke.brush_size as f64);
@@ -137,10 +142,10 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                 context.move_to(points[0].x, points[0].y);
                 context.line_to(points[1].x, points[1].y);
                 context.stroke();
-            },
+            }
             _ => {
                 // smooth curve for recent segment (last 3 points)
-                let [p1, p2, p3] = [&points[len-3], &points[len-2], &points[len-1]];
+                let [p1, p2, p3] = [&points[len - 3], &points[len - 2], &points[len - 1]];
 
                 context.begin_path();
                 context.move_to(p1.x, p1.y);
@@ -353,8 +358,9 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
     let on_mouse_down = move |e: web_sys::MouseEvent| {
         if let Some(canvas) = canvas_ref.get() {
             let rect = canvas.get_bounding_client_rect();
-            let x = e.client_x() as f64 - rect.left();
-            let y = e.client_y() as f64 - rect.top();
+            // scale coordinates to match canvas internal resolution
+            let x = (e.client_x() as f64 - rect.left()) * (canvas.width() as f64 / rect.width());
+            let y = (e.client_y() as f64 - rect.top()) * (canvas.height() as f64 / rect.height());
             start_drawing(x, y);
         }
     };
@@ -362,8 +368,9 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
     let on_mouse_move = move |e: web_sys::MouseEvent| {
         if let Some(canvas) = canvas_ref.get() {
             let rect = canvas.get_bounding_client_rect();
-            let x = e.client_x() as f64 - rect.left();
-            let y = e.client_y() as f64 - rect.top();
+            // scale coordinates to match canvas internal resolution
+            let x = (e.client_x() as f64 - rect.left()) * (canvas.width() as f64 / rect.width());
+            let y = (e.client_y() as f64 - rect.top()) * (canvas.height() as f64 / rect.height());
             continue_drawing(x, y);
         }
     };
@@ -739,8 +746,8 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                 <div class="w-full aspect-square sm:w-auto sm:h-auto sm:aspect-auto max-w-full max-h-full border-2 border-gray-300 dark:border-gray-600 rounded-lg shadow-lg overflow-hidden">
                     <canvas
                         node_ref=canvas_ref
-                        width="800"
-                        height="600"
+                        width="1600"
+                        height="1200"
                         class=move || {
                             let base = "w-full h-full bg-gray-100 dark:bg-white touch-none select-none";
                             if current_tool.get() == "deleter" {
