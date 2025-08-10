@@ -144,17 +144,23 @@ cfg_if! {
             }
 
             pub fn export_canvas_data(&self) -> String {
-                self.canvas_state.strokes
-                    .values()
+                (self.canvas_state.operation_history
+                    .iter()
+                    .filter_map(|op| {
+                        if let OperationType::DrawStroke { stroke_id, .. } = &op.operation_type {
+                            self.canvas_state.strokes.get(stroke_id)
+                        } else {
+                            None
+                        }
+                    })
                     .filter(|stroke| !stroke.deleted && !stroke.points.is_empty())
                     .fold(
-                        String::from(r#"<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">"#),
+                        String::from(r#"<svg width="1600" height="1200" viewBox="0 0 1600 1200" xmlns="http://www.w3.org/2000/svg">"#),
                         |mut svg, stroke| {
                             svg.push_str(&self.stroke_to_svg_path_pure(stroke));
                             svg
                         }
-                    )
-                    + "</svg>"
+                    )) + "</svg>"
             }
 
             fn stroke_to_svg_path_pure(&self, stroke: &Stroke) -> String {
