@@ -85,6 +85,48 @@ impl ClientCanvasState {
         }
     }
 
+    // create delete stroke operation
+    pub fn create_delete_stroke(&mut self, stroke_id: String) -> Operation {
+        let operation = self.create_operation(OperationType::DeleteStroke { stroke_id });
+
+        // apply immediately for responsive ui
+        self.apply_operation(&operation);
+        self.pending_operations.push_back(operation.clone());
+
+        operation
+    }
+
+    // find stroke at given position for eraser tool
+    pub fn find_stroke_at_position(&self, x: f64, y: f64) -> Option<String> {
+        // check strokes in reverse order (most recent first)
+        for operation in self.canvas_state.operation_history.iter().rev() {
+            if let OperationType::DrawStroke { stroke_id, .. } = &operation.operation_type {
+                if let Some(stroke) = self.canvas_state.strokes.get(stroke_id) {
+                    if !stroke.deleted && self.point_intersects_stroke(x, y, stroke) {
+                        return Some(stroke_id.clone());
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    // method to check if a point intersects with a stroke
+    fn point_intersects_stroke(&self, x: f64, y: f64, stroke: &Stroke) -> bool {
+        let tolerance = stroke.brush_size as f64 / 2.0 + 5.0; // add tolerance to make erasing "easier"
+
+        for point in &stroke.points {
+            let dx = x - point.x;
+            let dy = y - point.y;
+            let distance = (dx * dx + dy * dy).sqrt();
+
+            if distance <= tolerance {
+                return true;
+            }
+        }
+        false
+    }
+
     // create undo operation
     pub fn create_undo(&mut self, target_operation_id: String) -> Operation {
         let operation = self.create_operation(OperationType::Undo {

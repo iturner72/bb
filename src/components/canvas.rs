@@ -28,6 +28,7 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
     let (is_drawing, set_is_drawing) = signal(false);
     let (user_id, _set_user_id) = signal(generate_user_id());
     let (status_message, set_status_message) = signal(String::new());
+    let (current_tool, set_current_tool) = signal(String::from("pen")); // "pen" or "deleter"
 
     // Signals for touch events
     let (last_touch_x, set_last_touch_x) = signal(0.0);
@@ -166,20 +167,39 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
 
     // drawing event handlers
     let start_drawing = move |x: f64, y: f64| {
-        set_is_drawing.set(true);
-
-        canvas_state.update(|client_state| {
-            let point = Point {
-                x,
-                y,
-                pressure: None,
-            };
-            client_state.start_stroke(color.get(), brush_size.get(), point);
-        });
+        if current_tool.get() == "deleter" {
+            // deleter mode - find and delete stroke at this position
+            canvas_state.update(|client_state| {
+                if let Some(stroke_id) = client_state.find_stroke_at_position(x, y) {
+                    let delete_operation = client_state.create_delete_stroke(stroke_id);
+                    canvas_websocket.send(CanvasMessage::SubmitOperation(delete_operation));
+                }
+            });
+        } else {
+            // pen mode
+            set_is_drawing.set(true);
+            canvas_state.update(|client_state| {
+                let point = Point {
+                    x,
+                    y,
+                    pressure: None,
+                };
+                client_state.start_stroke(color.get(), brush_size.get(), point);
+            });
+        }
     };
 
     let continue_drawing = move |x: f64, y: f64| {
-        if is_drawing.get() {
+        if current_tool.get() == "deleter" {
+            // deleter mode - continuously delete strokes under cursor
+            canvas_state.update(|client_state| {
+                if let Some(stroke_id) = client_state.find_stroke_at_position(x, y) {
+                    let delete_operation = client_state.create_delete_stroke(stroke_id);
+                    canvas_websocket.send(CanvasMessage::SubmitOperation(delete_operation));
+                }
+            });
+        } else if is_drawing.get() {
+            // pen mode
             canvas_state.update(|client_state| {
                 let point = Point {
                     x,
@@ -188,7 +208,6 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                 };
                 client_state.add_to_stroke(point);
             });
-
             // draw line immediately for responsiveness
             draw_line_segment(x, y);
         }
@@ -504,6 +523,37 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
             // Enhanced toolbar with mobile-first responsive design
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between p-2 sm:p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 gap-3 sm:gap-0">
                 <div class="flex items-center justify-center sm:justify-start space-x-3 sm:space-x-4">
+                    // tool selection buttons
+                    <div class="flex items-center space-x-2">
+                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            "Tool:"
+                        </label>
+                        <button
+                            on:click=move |_| set_current_tool.set("pen".to_string())
+                            class=move || {
+                                if current_tool.get() == "pen" {
+                                    "bg-teal-500 text-white px-3 py-1 rounded text-sm"
+                                } else {
+                                    "bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-300"
+                                }
+                            }
+                        >
+                            "pen"
+                        </button>
+                        <button
+                            on:click=move |_| set_current_tool.set("deleter".to_string())
+                            class=move || {
+                                if current_tool.get() == "deleter" {
+                                    "bg-salmon-500 text-white px-3 py-1 rounded text-sm"
+                                } else {
+                                    "bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-300"
+                                }
+                            }
+                        >
+                            "deleter"
+                        </button>
+                    </div>
+
                     // Color picker
                     <div class="flex items-center space-x-2">
                         <label
@@ -602,7 +652,14 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                         node_ref=canvas_ref
                         width="800"
                         height="600"
-                        class="w-full h-full bg-gray-100 dark:bg-white cursor-crosshair touch-none select-none"
+                        class=move || {
+                            let base = "w-full h-full bg-gray-100 dark:bg-white touch-none select-none";
+                            if current_tool.get() == "deleter" {
+                                format!("{} cursor-crosshair", base)
+                            } else {
+                                format!("{} cursor-crosshair", base)
+                            }
+                        }
                         style="display: block; object-fit: contain;"
                         on:mousedown=on_mouse_down
                         on:mousemove=on_mouse_move
