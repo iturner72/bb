@@ -17,6 +17,7 @@ pub struct ClientCanvasState {
     pub last_server_sequence: u64,
     pub client_id: String,
     pub current_stroke: Option<CurrentStroke>,
+    pub redo_stack: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -40,6 +41,7 @@ impl ClientCanvasState {
             last_server_sequence: 0,
             client_id,
             current_stroke: None,
+            redo_stack: Vec::new(),
         }
     }
 
@@ -86,13 +88,31 @@ impl ClientCanvasState {
     // create undo operation
     pub fn create_undo(&mut self, target_operation_id: String) -> Operation {
         let operation = self.create_operation(OperationType::Undo {
-            target_operation_id,
+            target_operation_id: target_operation_id.clone(),
         });
 
+        self.redo_stack.push(target_operation_id);
         self.apply_operation(&operation);
         self.pending_operations.push_back(operation.clone());
 
         operation
+    }
+
+    // create redo operation
+    pub fn create_redo(&mut self) -> Option<Operation> {
+        // get the most recent undo that can be redone
+        if let Some(undo_target_id) = self.redo_stack.pop() {
+            let operation = self.create_operation(OperationType::Redo {
+                target_operation_id: undo_target_id,
+            });
+
+            self.apply_operation(&operation);
+            self.pending_operations.push_back(operation.clone());
+
+            Some(operation)
+        } else {
+            None
+        }
     }
 
     // create clear operation
@@ -137,15 +157,30 @@ impl ClientCanvasState {
                     deleted: false,
                 };
                 self.canvas_state.strokes.insert(stroke_id.clone(), stroke);
+
+                // clear redo stack when new operation is performed
+                if operation.client_id == self.client_id {
+                    self.redo_stack.clear();
+                }
             }
             OperationType::DeleteStroke { stroke_id } => {
                 if let Some(stroke) = self.canvas_state.strokes.get_mut(stroke_id) {
                     stroke.deleted = true;
                 }
+
+                // clear redo stack when new operation is performed
+                if operation.client_id == self.client_id {
+                    self.redo_stack.clear();
+                }
             }
             OperationType::Clear => {
                 for stroke in self.canvas_state.strokes.values_mut() {
                     stroke.deleted = true;
+                }
+
+                // clear redo stack when new operation is performed
+                if operation.client_id == self.client_id {
+                    self.redo_stack.clear();
                 }
             }
             OperationType::Undo {
@@ -167,6 +202,29 @@ impl ClientCanvasState {
                         OperationType::DeleteStroke { stroke_id } => {
                             if let Some(stroke) = self.canvas_state.strokes.get_mut(stroke_id) {
                                 stroke.deleted = false;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            OperationType::Redo { target_operation_id } => {
+                // find the original operation that was undone and restore its effects
+                if let Some(target_op) = self
+                    .canvas_state
+                    .operation_history
+                    .iter()
+                    .find(|op| op.id == *target_operation_id)
+                {
+                    match &target_op.operation_type {
+                        OperationType::DrawStroke { stroke_id, .. } => {
+                            if let Some(stroke) = self.canvas_state.strokes.get_mut(stroke_id) {
+                                stroke.deleted = false;
+                            }
+                        } 
+                        OperationType::DeleteStroke { stroke_id } => {
+                            if let Some(stroke) = self.canvas_state.strokes.get_mut(stroke_id) {
+                                stroke.deleted = true;
                             }
                         }
                         _ => {}
@@ -267,6 +325,15 @@ impl ClientCanvasState {
 
     pub fn can_undo(&self) -> bool {
         !self.get_undoable_operations().is_empty()
+    }
+
+    pub fn get_redoable_operations(&self) -> Vec<String> {
+        // return operations in reverse order (most recent undo first)
+        self.redo_stack.iter().rev().cloned().collect()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        !self.redo_stack.is_empty()
     }
 
     pub fn get_pending_operations(&self) -> Vec<Operation> {

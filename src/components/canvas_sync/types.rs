@@ -27,6 +27,9 @@ pub enum OperationType {
     Undo {
         target_operation_id: String,
     },
+    Redo {
+        target_operation_id: String,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -185,7 +188,100 @@ pub fn transform_operation(op1: Operation, op2: &Operation, side: TransformSide)
             }
         }
 
-        // mixed undo with other operations
+        // Redo operations //
+        // Redo vs Redo conflicts
+        (
+            OperationType::Redo {
+                target_operation_id: target1,
+            },
+            OperationType::Redo {
+                target_operation_id: target2,
+            },
+        ) => {
+            if target1 == target2 {
+                // both trying to redo the same operation
+                match side {
+                    TransformSide::Left => op1,
+                    TransformSide::Right => {
+                        // transform to no-op
+                        Operation {
+                            operation_type: OperationType::DrawStroke {
+                                stroke_id: format!("noop_{}", op1.id),
+                                points: vec![],
+                                color: "transparent".to_string(),
+                                brush_size: 0,
+                            },
+                            ..op1
+                        }
+                    }
+                }
+            } else {
+                op1 // different targets, no conflict
+            }
+        }
+
+        // Undo vs Redo conflicts
+        (
+            OperationType::Undo {
+                target_operation_id: undo_target,
+            },
+            OperationType::Redo {
+                target_operation_id: redo_target,
+            },
+        ) => {
+            if undo_target == redo_target {
+                // undo and redo targeting the same operation - they cancel out
+                match side {
+                    TransformSide::Left => op1, // undo wins
+                    TransformSide::Right => {
+                        // transform undo to no-op since redo happened first
+                        Operation {
+                            operation_type: OperationType::DrawStroke {
+                                stroke_id: format!("noop_{}", op1.id),
+                                points: vec![],
+                                color: "transparent".to_string(),
+                                brush_size: 0,
+                            },
+                            ..op1
+                        }
+                    }
+                }
+            } else {
+                op1 // different targets, no conflict
+            }
+        }
+
+        // Redo vs Undo (reverse of above)
+        (
+            OperationType::Redo {
+                target_operation_id: redo_target,
+            },
+            OperationType::Undo {
+                target_operation_id: undo_target,
+            },
+        ) => {
+            if redo_target == undo_target {
+                match side {
+                    TransformSide::Left => op1, // redo wins
+                    TransformSide::Right => {
+                        // transform redo to op-op since undo happened first
+                        Operation {
+                            operation_type: OperationType::DrawStroke {
+                                stroke_id: format!("noop_{}", op1.id),
+                                points: vec![],
+                                color: "transparent".to_string(),
+                                brush_size: 0,
+                            },
+                            ..op1
+                        }
+                    }
+                }
+            } else {
+                op1 // different targets, no conflict
+            }
+        }
+
+        // for all other combinations with redo, no conflicts
         _ => op1,
     }
 }

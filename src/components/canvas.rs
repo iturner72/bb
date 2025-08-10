@@ -222,6 +222,15 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
         });
     };
 
+    // redo last operation
+    let redo = move |_: web_sys::MouseEvent| {
+        canvas_state.update(|client_state| {
+            if let Some(redo_operation) = client_state.create_redo() {
+                canvas_websocket.send(CanvasMessage::SubmitOperation(redo_operation));
+            }
+        });
+    };
+
     // save canvas as SVG
     let save_canvas = move |_: web_sys::MouseEvent| {
         canvas_websocket.send(CanvasMessage::SaveCanvas);
@@ -336,7 +345,7 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
             }
         }
     };
-    
+
     // force interpolated drawing between touch points
     let on_touch_move = move |e: web_sys::TouchEvent| {
         e.prevent_default();
@@ -353,16 +362,16 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                         let touch: web_sys::Touch = touch.dyn_into().unwrap();
                         if let Some(canvas) = canvas_ref.get() {
                             let (x, y) = get_canvas_coordinates(&canvas, touch.client_x() as f64, touch.client_y() as f64);
-                            
+
                             // get the last position
                             let prev_x = last_touch_x.get();
                             let prev_y = last_touch_y.get();
-                            
+
                             // calculate distance
                             let dx = x - prev_x;
                             let dy = y - prev_y;
                             let distance = (dx * dx + dy * dy).sqrt();
-                            
+
                             // if the distance is large (due to throttling), interpolate points
                             if distance > 8.0 {  // adjust this threshold
                                 let steps = (distance / 6.0) as i32; // create intermediate points
@@ -375,7 +384,7 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                             } else {
                                 continue_drawing(x, y);
                             }
-                            
+
                             set_last_touch_x.set(x);
                             set_last_touch_y.set(y);
                         }
@@ -396,6 +405,10 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
             match ev.key().as_str() {
                 "z" => {
                     undo(web_sys::MouseEvent::new("click").unwrap());
+                    ev.prevent_default();
+                }
+                "y" => {
+                    redo(web_sys::MouseEvent::new("click").unwrap());
                     ev.prevent_default();
                 }
                 "s" => {
@@ -466,15 +479,16 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                             {status_message}
                         </div>
 
-                        // Pending operations and undo status - simplified on mobile
+                        // Pending operations and undo/redo status - simplified on mobile
                         <div class="text-gray-500 dark:text-gray-400">
                             {move || {
                                 canvas_state
                                     .with(|client_state| {
                                         format!(
-                                            "P:{} | U:{}",
+                                            "P:{} | U:{} | R:{}",
                                             client_state.get_pending_operations().len(),
                                             if client_state.can_undo() { "Y" } else { "N" },
+                                            if client_state.can_redo() { "Y" } else { "N" },
                                         )
                                     })
                             }}
@@ -544,19 +558,31 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
                         disabled=move || {
                             canvas_state.with(|canvas_state| { !canvas_state.can_undo() })
                         }
-                        title="Undo last action (Ctrl+Z)"
+                        title="Undo last action (⌘Z)"
                     >
                         <span class="sm:hidden">"Undo"</span>
-                        <span class="hidden sm:inline">"Undo (Ctrl+Z)"</span>
+                        <span class="hidden sm:inline">"Undo (⌘Z)"</span>
+                    </button>
+
+                    <button
+                        on:click=redo
+                        class="bg-teal-500 hover:bg-teal-600 active:bg-teal-700 text-white px-3 py-2 sm:py-1 rounded text-sm disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors touch-manipulation"
+                        disabled=move || {
+                            canvas_state.with(|canvas_state| { !canvas_state.can_redo() })
+                        }
+                        title="Redo last undone action (⌘Y)"
+                    >
+                        <span class="sm:hidden">"Redo"</span>
+                        <span class="hidden sm:inline">"Redo (⌘Y)"</span>
                     </button>
 
                     <button
                         on:click=save_canvas
                         class="bg-mint-400 hover:bg-mint-600 active:bg-mint-700 text-gray-700 px-3 py-2 sm:py-1 rounded text-sm transition-colors touch-manipulation"
-                        title="Save canvas as SVG (Ctrl+S)"
+                        title="Save canvas as SVG (⌘S)"
                     >
                         <span class="sm:hidden">"Save"</span>
-                        <span class="hidden sm:inline">"Save (Ctrl+S)"</span>
+                        <span class="hidden sm:inline">"Save (⌘S)"</span>
                     </button>
 
                     <button

@@ -100,6 +100,27 @@ cfg_if! {
                             }
                         }
                     }
+                    OperationType::Redo { target_operation_id } => {
+                        // find the original operation and restore its effects
+                        if let Some(target_op) = self.canvas_state.operation_history
+                            .iter()
+                            .find(|op| op.id == *target_operation_id) {
+
+                            match &target_op.operation_type {
+                                OperationType::DrawStroke { stroke_id, .. } => {
+                                    if let Some(stroke) = self.canvas_state.strokes.get_mut(stroke_id) {
+                                        stroke.deleted = false; // restore the stroke
+                                    }
+                                }
+                                OperationType::DeleteStroke { stroke_id } => {
+                                    if let Some(stroke) = self.canvas_state.strokes.get_mut(stroke_id) {
+                                        stroke.deleted = true; // re-delete the stroke
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
                 }
 
                 self.canvas_state.operation_history.push(operation.clone());
