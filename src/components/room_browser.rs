@@ -1,12 +1,17 @@
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
-use uuid::Uuid;
+use leptos_fetch::QueryClient;
 use std::sync::Arc;
+use uuid::Uuid;
 
 use super::drawing_rooms::*;
 use crate::auth::context::AuthContext;
 use crate::models::{CanvasRoomView, JoinRoomView};
 use crate::components::drawing_rooms::CreateDrawingRoom;
+
+async fn fetch_rooms_list() -> Result<Vec<RoomListItem>, ServerFnError> {
+    list_rooms().await
+}
 
 #[component]
 pub fn RoomBrowser() -> impl IntoView {
@@ -15,33 +20,25 @@ pub fn RoomBrowser() -> impl IntoView {
     let (_current_room, set_current_room) = signal(None::<Uuid>);
 
     let navigate = use_navigate();
-    
-    // wrap navigate in Arc to make it thread-safe and shareable
     let navigate_arc = Arc::new(navigate);
+
+    let client: QueryClient = expect_context();
 
     // get auth context
     let auth = use_context::<AuthContext>()
         .expect("AuthContext should be available");
 
-    // room list resource
-    let rooms = Resource::new(
-        move || {
-            // Re-run when auth loading state changes
-            (auth.is_loading.get(), auth.is_authenticated.get())
-        },
-        move |_| async move { 
-            // Only fetch rooms if auth has finished loading
-            if !auth.is_loading.get() {
-                list_rooms().await
-            } else {
-                Ok(vec![]) // Return empty while loading
-            }
+    // reactive key dependent on auth state
+    let rooms_query_key = move || {
+        // only return Some when auth is not loading, to prevent query when not ready
+        if !auth.is_loading.get() && auth.is_authenticated.get() {
+            Some(()) // key for rooms query
+        } else {
+            None
         }
-    );
-
-    let refresh_rooms = move || {
-        rooms.refetch();
     };
+
+    let rooms_resource = client.resource(fetch_rooms_list, rooms_query_key);
 
     let join_room_action = ServerAction::<JoinRoom>::new();
 
@@ -52,12 +49,18 @@ pub fn RoomBrowser() -> impl IntoView {
             if let Some(Ok(room_details)) = join_room_action.value().get() {
                 let room_id = room_details.room.id;
                 set_current_room(Some(room_id));
+                client.invalidate_query(fetch_rooms_list, &());
                 navigate_for_effect(&format!("/room/{}", room_id), Default::default());
             } else if let Some(Err(e)) = join_room_action.value().get() {
                 log::error!("Failed to join room: {}", e);
             }
         });
     }
+
+    let refresh_rooms = move || {
+        client.invalidate_query(fetch_rooms_list, &());
+    };
+
 
     // clone Arc for use in view closures
     let navigate_for_create = navigate_arc.clone();
@@ -67,12 +70,6 @@ pub fn RoomBrowser() -> impl IntoView {
             <div class="flex justify-between items-center">
                 <h1 class="text-3xl font-bold text-gray-800 dark:text-gray-200">"Drawing Rooms"</h1>
                 <div class="flex items-center space-x-4">
-                    <button
-                        on:click=move |_: web_sys::MouseEvent| refresh_rooms()
-                        class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors"
-                    >
-                        "Refresh"
-                    </button>
                     <button
                         on:click=move |_: web_sys::MouseEvent| set_show_create_form(
                             !show_create_form.get(),
@@ -159,11 +156,20 @@ pub fn RoomBrowser() -> impl IntoView {
                     })
             }}
 
-            // Rooms list - now uses Arc, thread-safe
+            // rooms list with leptos-fetch
             <div class="bg-white dark:bg-teal-800 p-4 rounded-lg shadow-md">
-                <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
-                    "Public Rooms"
-                </h2>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                        "Public Rooms"
+                    </h2>
+                    <button
+                        on:click=move |_| refresh_rooms()
+                        class="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 
+                             text-gray-700 dark:text-gray-200 rounded transition-colors"
+                    >
+                        "Refresh"
+                    </button>
+                </div>
 
                 <Suspense fallback=|| {
                     view! {
@@ -172,75 +178,83 @@ pub fn RoomBrowser() -> impl IntoView {
                             <p class="text-gray-500 dark:text-gray-400 mt-2">"Loading rooms..."</p>
                         </div>
                     }
-                        .into_any()
                 }>
                     {move || {
-                        let join_action_clone = join_room_action;
-                        rooms
-                            .get()
-                            .map(move |result| {
-                                match result {
-                                    Ok(room_list) => {
-                                        if room_list.is_empty() {
-                                            view! {
-                                                <div class="text-center py-8">
-                                                    <p class="text-gray-500 dark:text-gray-400">
-                                                        "No public rooms available. Create one to get started!"
-                                                    </p>
-                                                </div>
-                                            }
-                                                .into_any()
-                                        } else {
-                                            view! {
-                                                <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                                    <For
-                                                        each=move || room_list.clone()
-                                                        key=|room_item| room_item.room.id
-                                                        children=move |room_item| {
-                                                            let room_code = room_item.room.room_code.clone();
-                                                            let join_action_for_card = join_action_clone;
-                                                            view! {
-                                                                <RoomCard
-                                                                    room_item=room_item
-                                                                    on_join=Callback::new(move |_room_id: uuid::Uuid| {
-                                                                        let join_room_request = JoinRoom {
-                                                                            join_data: JoinRoomView {
-                                                                                room_code: room_code.clone(),
-                                                                            },
-                                                                        };
-                                                                        join_action_for_card.dispatch(join_room_request);
-                                                                    })
-                                                                    on_delete=Callback::new(move |_room_id: uuid::Uuid| {
-                                                                        refresh_rooms();
-                                                                    })
-                                                                />
-                                                            }
-                                                                .into_any()
-                                                        }
-                                                    />
-                                                </div>
-                                            }
-                                                .into_any()
-                                        }
-                                    }
-                                    Err(e) => {
+                        Suspend::new(async move {
+                            match rooms_resource.await {
+                                Some(Ok(room_list)) => {
+                                    if room_list.is_empty() {
                                         view! {
                                             <div class="text-center py-8">
-                                                <p class="text-salmon-500">
-                                                    "Error loading rooms: "{e.to_string()}
+                                                <p class="text-gray-500 dark:text-gray-400">
+                                                    "No public rooms available. Create one to get started!"
                                                 </p>
-                                                <button
-                                                    on:click=move |_| refresh_rooms()
-                                                    class="mt-2 px-4 py-2 bg-seafoam-600 hover:bg-seafoam-700 text-white rounded-md"
-                                                >
-                                                    "Try Again"
-                                                </button>
                                             </div>
-                                        }
-                                            .into_any()
+                                        }.into_any()
+                                    } else {
+                                        view! {
+                                            <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                                <For
+                                                    each=move || room_list.clone()
+                                                    key=|room_item| room_item.room.id
+                                                    children=move |room_item| {
+                                                        let room_code = room_item.room.room_code.clone();
+                                                        view! {
+                                                            <RoomCard 
+                                                                room_item=room_item.clone()
+                                                                on_join=Callback::new(move |_room_id| {
+                                                                    set_join_code(room_code.clone());
+                                                                    join_room_action.dispatch(JoinRoom {
+                                                                        join_data: JoinRoomView {
+                                                                            room_code: room_code.clone()
+                                                                        }
+                                                                    });
+                                                                })
+                                                                on_delete=Callback::new(move |_room_id| {
+                                                                    refresh_rooms();
+                                                                })
+                                                            />
+                                                        }
+                                                    }
+                                                />
+                                            </div>
+                                        }.into_any()
                                     }
+                                },
+                                Some(Err(e)) => {
+                                    view! {
+                                        <div class="text-center py-8">
+                                            <div class="mb-4">
+                                                <svg class="mx-auto h-12 w-12 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                                </svg>
+                                            </div>
+                                            <p class="text-red-600 dark:text-red-400 mb-2">
+                                                "Failed to load rooms"
+                                            </p>
+                                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                                {e.to_string()}
+                                            </p>
+                                            <button
+                                                on:click=move |_| refresh_rooms()
+                                                class="px-4 py-2 bg-mint-600 hover:bg-mint-700 text-white rounded transition-colors"
+                                            >
+                                                "Try Again"
+                                            </button>
+                                        </div>
+                                    }.into_any()
+                                },
+                                None => {
+                                    view! {
+                                        <div class="text-center py-8">
+                                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-seafoam-600 mx-auto"></div>
+                                            <p class="text-gray-500 dark:text-gray-400 mt-2">"Loading rooms..."</p>
+                                        </div>
+                                    }.into_any()
                                 }
-                            })
+                            }
+                        })
                     }}
                 </Suspense>
             </div>

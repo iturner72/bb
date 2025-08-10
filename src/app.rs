@@ -1,10 +1,12 @@
 use leptos::prelude::*;
 use leptos_meta::*;
+use leptos_fetch::{QueryClient, QueryDevtools};
 use leptos_router::{
     components::{FlatRoutes, Route, Router},
     hooks::use_params_map,
     path,
 };
+use std::time::Duration;
 use uuid::Uuid;
 
 use crate::auth::auth_components::{AdminLogin, ProtectedAdminPanel};
@@ -43,7 +45,17 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 pub fn App() -> impl IntoView {
     provide_meta_context();
 
+    let client = QueryClient::new()
+        .with_options(
+            leptos_fetch::QueryOptions::new()
+                .with_stale_time(Duration::from_secs(30))
+                .with_gc_time(Duration::from_secs(300)),
+        );
+
+    client.provide();
+
     view! {
+        <QueryDevtools client=client/>
         <AuthProvider>
             <Router>
                 <FlatRoutes fallback=|| "page not found.">
@@ -81,7 +93,7 @@ fn HomePage() -> impl IntoView {
                 >
                     "drawing rooms"
                 </a>
-            </div>
+           </div>
 
             <div class="px-2 sm:px-0">
                 <Poasts />
