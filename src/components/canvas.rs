@@ -1,6 +1,7 @@
 use cfg_if::cfg_if;
 use leptos::prelude::*;
 
+use crate::auth::context::AuthContext;
 use super::canvas_sync::{
     client_state::ClientCanvasState,
     types::{CanvasMessage, Point},
@@ -22,6 +23,9 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
     // Get message handler registration callback from context
     let register_handler = expect_context::<Callback<Callback<CanvasMessage>>>();
 
+    // get auth context for user preferences
+    let auth = use_context::<AuthContext>().expect("AuthContext should be available");
+
     // Canvas-specific state
     let (color, set_color) = signal(String::from("#000000"));
     let (brush_size, set_brush_size) = signal(5);
@@ -37,6 +41,18 @@ pub fn OTDrawingCanvas(#[prop(into)] room_id: String) -> impl IntoView {
     // OT-specific state
     let canvas_state = RwSignal::new(ClientCanvasState::new(user_id.get()));
     let canvas_ref = NodeRef::<leptos::html::Canvas>::new();
+
+    // init preferences from user data when available
+    Effect::new(move |_| {
+        if let Some(user) = auth.current_user.get() {
+            if let Some(preferred_color) = user.preferred_brush_color {
+                set_color.set(preferred_color);
+            }
+            if let Some(preferred_size) = user.preferred_brush_size {
+                set_brush_size.set(preferred_size);
+            }
+        }
+    });
 
     // redraw entire canvas from current state
     let redraw_canvas = move || {

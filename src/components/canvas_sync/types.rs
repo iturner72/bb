@@ -18,7 +18,7 @@ pub enum OperationType {
         stroke_id: String,
         points: Vec<Point>,
         color: String,
-        brush_size: u32,
+        brush_size: i32,
     },
     DeleteStroke {
         stroke_id: String,
@@ -44,7 +44,7 @@ pub struct Stroke {
     pub id: String,
     pub points: Vec<Point>,
     pub color: String,
-    pub brush_size: u32,
+    pub brush_size: i32,
     pub created_by: String,
     pub created_at: DateTime<Utc>,
     pub deleted: bool,

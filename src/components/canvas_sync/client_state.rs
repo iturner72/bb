@@ -25,7 +25,7 @@ pub struct CurrentStroke {
     pub stroke_id: String,
     pub points: Vec<Point>,
     pub color: String,
-    pub brush_size: u32,
+    pub brush_size: i32,
 }
 
 impl ClientCanvasState {
@@ -45,7 +45,7 @@ impl ClientCanvasState {
         }
     }
 
-    pub fn start_stroke(&mut self, color: String, brush_size: u32, point: Point) -> String {
+    pub fn start_stroke(&mut self, color: String, brush_size: i32, point: Point) -> String {
         let stroke_id = self.generate_stroke_id();
 
         self.current_stroke = Some(CurrentStroke {
