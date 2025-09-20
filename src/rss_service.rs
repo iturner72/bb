@@ -266,15 +266,74 @@ pub async fn process_feeds_with_progress(
 
 pub async fn scrape_page(url: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
     let response = reqwest::get(url).await?.text().await?;
-    
+
     let document = scraper::Html::parse_document(&response);
-    let body_selector = scraper::Selector::parse("body").unwrap();
-    let text: String = document
-        .select(&body_selector)
-        .flat_map(|element| element.text())
-        .collect();
-    
-    Ok(text)
+
+    let main_content_selectors = [
+        "article",
+        ".post-content",
+        ".entry-content",
+        ".content",
+        "main",
+        ".post",
+        ".article-content"
+    ];
+
+    let mut extracted_text = String::new();
+
+    for selector_str in &main_content_selectors {
+        if let Ok(selector) = scraper::Selector::parse(selector_str) {
+            let content: String = document
+                .select(&selector)
+                .flat_map(|element| element.text())
+                .collect::<Vec<_>>()
+                .join(" ");
+
+            if !content.trim().is_empty() && content.len() > extracted_text.len() {
+                extracted_text = content;
+            }
+        }
+    }
+
+    if extracted_text.trim().is_empty() {
+        let body_selector = scraper::Selector::parse("body").unwrap();
+        extracted_text = document
+            .select(&body_selector)
+            .flat_map(|element| element.text())
+            .collect();
+    }
+
+    let cleaned_text = extracted_text
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    // truncate to stay under openai limit for gpt-4o-mini
+    const MAX_CHARS: usize = 120_000; // conservative limit ~25k-40k tokens
+
+    let final_text = if cleaned_text.len() > MAX_CHARS {
+        log::info!("truncating content from {} to {} chars for URL: {}",
+            cleaned_text.len(), MAX_CHARS, url);
+
+        let truncated = &cleaned_text[..MAX_CHARS];
+        match truncated.rfind('.') {
+            Some(last_period) if last_period > MAX_CHARS / 2 => {
+                &cleaned_text[..last_period + 1]
+            }
+            _ => {
+                // fallback to word boundary
+                match truncated.rfind(' ') {
+                    Some(last_space) => &cleaned_text[..last_space],
+                    None => truncated
+                }
+            }
+        }
+    } else {
+        &cleaned_text
+    };
+
+    log::debug!("scraped {} characters from {}", final_text.len(), url);
+    Ok(final_text.to_string())
 }
 
 pub async fn get_post_insights(
